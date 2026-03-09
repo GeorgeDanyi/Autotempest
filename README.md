@@ -29,6 +29,24 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Cron (ingest + rebuild price index)
+
+Spuštění cronu ručně (z kořene repo):
+
+```bash
+CRON_BASE_URL=http://localhost:3000 ADMIN_TOKEN=... npm run cron:run
+```
+
+Na serveru (crontab každých 6 h):
+
+```bash
+crontab -e
+# přidej řádek:
+0 */6 * * * cd /path/to/project && CRON_BASE_URL=https://domena.cz ADMIN_TOKEN=... npm run cron:run >> cron.log 2>&1
+```
+
+Režim jen přepočet indexu bez ingest: `CRON_MODE=index_only npm run cron:run`.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
