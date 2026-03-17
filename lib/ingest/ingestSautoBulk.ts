@@ -30,13 +30,73 @@ export const BRANDS = [
 ];
 
 /** Models to crawl per brand (znacka=<brand>&model=<model>). */
-const BRAND_MODELS: Record<string, string[]> = {
-  skoda: ["octavia", "superb", "fabia", "kodiaq", "scala", "kamiq"],
-  volkswagen: ["golf", "passat", "tiguan", "polo", "touareg"],
-  bmw: ["3", "5", "x3", "x5", "1"],
-  audi: ["a3", "a4", "a6", "q5", "q7"],
-  toyota: ["corolla", "rav4", "yaris"],
-  ford: ["focus", "mondeo", "kuga", "fiesta"],
+export const BRAND_MODELS: Record<string, string[]> = {
+  skoda: [
+    "octavia",
+    "superb",
+    "fabia",
+    "kodiaq",
+    "scala",
+    "kamiq",
+    "karoq",
+    "octavia_rs",
+    "rapid",
+    "enyaq",
+    "octavia_combi",
+  ],
+  volkswagen: [
+    "golf",
+    "passat",
+    "tiguan",
+    "polo",
+    "touareg",
+    "sharan",
+    "touran",
+    "caddy",
+    "t-roc",
+    "arteon",
+    "id4",
+    "id3",
+  ],
+  bmw: ["3", "5", "x3", "x5", "1", "x1", "2", "4", "7", "m3", "x2", "x6", "i3"],
+  audi: ["a3", "a4", "a6", "q5", "q7", "a1", "a5", "a8", "q3", "tt", "q2", "e-tron"],
+  "mercedes-benz": ["a", "b", "c", "e", "s", "gla", "glc", "gle", "gls", "cla", "slk"],
+  toyota: [
+    "corolla",
+    "rav4",
+    "yaris",
+    "c-hr",
+    "camry",
+    "land-cruiser",
+    "prius",
+    "auris",
+    "hilux",
+    "proace",
+  ],
+  ford: [
+    "focus",
+    "mondeo",
+    "kuga",
+    "fiesta",
+    "puma",
+    "galaxy",
+    "s-max",
+    "explorer",
+    "ranger",
+    "transit",
+    "tourneo",
+    "mustang",
+  ],
+  hyundai: ["i30", "i20", "tucson", "santa-fe", "ioniq", "kona", "ioniq5", "i10"],
+  kia: ["ceed", "sportage", "sorento", "stinger", "niro", "rio", "ev6", "xceed"],
+  peugeot: ["208", "308", "3008", "5008", "508"],
+  renault: ["clio", "megane", "kadjar", "captur", "scenic"],
+  seat: ["ibiza", "leon", "ateca", "arona", "tarraco"],
+  opel: ["astra", "insignia", "mokka", "corsa", "grandland"],
+  nissan: ["qashqai", "x-trail", "juke", "leaf", "micra"],
+  mazda: ["cx-5", "cx-3", "3", "6", "mx-5"],
+  honda: ["civic", "cr-v", "hr-v", "jazz", "accord"],
+  volvo: ["xc60", "xc90", "v60", "v90", "s60"],
 };
 
 function printHelp(): void {
@@ -122,24 +182,47 @@ export type RunSautoFetchAndParseResult = {
 
 export async function runSautoFetchAndParse(options: {
   brands: boolean;
+  models: boolean;
   pages: number;
 }): Promise<RunSautoFetchAndParseResult> {
-  const { pages } = options;
+  const { pages, brands, models } = options;
   const allParsed: SautoParsedListing[] = [];
   let pagesFetched = 0;
-  let brandsProcessed = 0;
+  const brandsTouched = new Set<string>();
   const errors: string[] = [];
 
-  for (const brand of BRANDS) {
-    const { allParsed: brandListings, pagesFetched: n, errors: e } = await fetchSautoPages({
-      pages,
-      brand,
-    });
-    allParsed.push(...brandListings);
-    pagesFetched += n;
-    brandsProcessed += 1;
-    errors.push(...e);
+  if (brands) {
+    for (const brand of BRANDS) {
+      const { allParsed: brandListings, pagesFetched: n, errors: e } =
+        await fetchSautoPages({
+          pages,
+          brand,
+        });
+      allParsed.push(...brandListings);
+      pagesFetched += n;
+      brandsTouched.add(brand);
+      errors.push(...e);
+    }
   }
+
+  if (models) {
+    for (const [brand, modelList] of Object.entries(BRAND_MODELS)) {
+      for (const model of modelList) {
+        const { allParsed: modelListings, pagesFetched: n, errors: e } =
+          await fetchSautoPages({
+            pages,
+            brand,
+            model,
+          });
+        allParsed.push(...modelListings);
+        pagesFetched += n;
+        brandsTouched.add(brand);
+        errors.push(...e);
+      }
+    }
+  }
+
+  const brandsProcessed = brandsTouched.size;
 
   const byId = new Map<string, SautoParsedListing>();
   for (const p of allParsed) {
@@ -164,7 +247,7 @@ export async function runSautoBulkIngest(options: {
 }): Promise<RunSautoBulkIngestResult> {
   const supabase = getSupabaseAdmin();
   const { uniqueListings, pagesFetched, parsedListings, brandsProcessed } =
-    await runSautoFetchAndParse(options);
+    await runSautoFetchAndParse({ brands: options.brands, models: false, pages: options.pages });
 
   let inserted = 0;
   let skippedExisting = 0;

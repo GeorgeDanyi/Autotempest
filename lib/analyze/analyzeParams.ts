@@ -80,8 +80,21 @@ export function parseAnalyzeParams(searchParams: URLSearchParams): AnalyzeParams
     const brand = brandRaw ? (normalizeBrandKey(brandRaw) || null) : null;
     const yearFrom = safeYear(get("yearFrom")) ?? safeYear(get("year"));
     const yearTo = safeYear(get("yearTo")) ?? safeYear(get("year"));
-    const mileageFrom = safeMileage(get("mileageFrom")) ?? null;
-    const mileageTo = safeMileage(get("mileageTo")) ?? safeMileage(get("mileage_km"));
+    const rawMileageKm = safeMileage(get("mileage_km"));
+    const rawMileageFrom = safeMileage(get("mileageFrom"));
+    const rawMileageTo = safeMileage(get("mileageTo"));
+
+    let mileageFrom: string | null;
+    let mileageTo: string | null;
+
+    if (rawMileageKm && !rawMileageFrom && !rawMileageTo) {
+      const km = parseInt(rawMileageKm, 10);
+      mileageFrom = String(Math.max(0, km - 25000));
+      mileageTo = String(km + 25000);
+    } else {
+      mileageFrom = rawMileageFrom ?? null;
+      mileageTo = rawMileageTo ?? rawMileageKm ?? null;
+    }
     const engine = normalizeEngineParam(get("engine"));
     const fuels = safeString(get("fuels"));
     const transmission = safeString(get("transmission"));

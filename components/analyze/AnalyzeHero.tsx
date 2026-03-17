@@ -31,7 +31,11 @@ export function AnalyzeHero() {
 
     const chips: string[] = [];
     const yearLabel =
-      yearFrom && yearTo ? `${yearFrom}–${yearTo}` : yearFrom ?? yearTo ?? null;
+      yearFrom && yearTo
+        ? yearFrom === yearTo
+          ? yearFrom
+          : `${yearFrom}–${yearTo}`
+        : yearFrom ?? yearTo ?? null;
 
     if (brand) chips.push(brand);
     if (model) chips.push(model);

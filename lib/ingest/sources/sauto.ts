@@ -67,7 +67,7 @@ export async function runSautoIngest(
     uniqueListings = Array.from(byId.values());
     pagesFetched = n;
   } else {
-    const result = await runSautoFetchAndParse({ brands: true, pages: DEFAULT_PAGES });
+    const result = await runSautoFetchAndParse({ brands: true, models: false, pages: DEFAULT_PAGES });
     uniqueListings = result.uniqueListings;
     pagesFetched = result.pagesFetched;
     errors.push(...result.errors);

@@ -109,6 +109,12 @@ export async function GET(req: NextRequest) {
     }
 
     const filters = parseBucketToFilters(resolved_bucket);
+    const yearFromParam = searchParams.get("yearFrom")?.trim() ?? null;
+    const yearToParam = searchParams.get("yearTo")?.trim() ?? null;
+    const yearFromNum = yearFromParam ? parseInt(yearFromParam.replace(/\D/g, ""), 10) : null;
+    const yearToNum = yearToParam ? parseInt(yearToParam.replace(/\D/g, ""), 10) : null;
+    const effectiveYearFrom = yearFromNum != null && !Number.isNaN(yearFromNum) ? yearFromNum : filters.yearFrom;
+    const effectiveYearTo = yearToNum != null && !Number.isNaN(yearToNum) ? yearToNum : filters.yearTo;
     const engine_key = engineParam ?? filters.engineKey ?? null;
     const fuel = fuelParam ?? null;
 
@@ -134,8 +140,8 @@ export async function GET(req: NextRequest) {
       .not("mileage_km", "is", null)
       .not("price_czk", "is", null);
 
-    if (filters.yearFrom != null) query = query.gte("year", filters.yearFrom);
-    if (filters.yearTo != null) query = query.lte("year", filters.yearTo);
+    if (effectiveYearFrom != null) query = query.gte("year", effectiveYearFrom);
+    if (effectiveYearTo != null) query = query.lte("year", effectiveYearTo);
     if (engine_key) query = query.eq("engine_key", engine_key);
     if (fuel) query = query.eq("fuel", fuel);
     if (hasExplicitMileage) {

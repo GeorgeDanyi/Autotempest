@@ -10,9 +10,14 @@ export function MainContent({
 }) {
   const pathname = usePathname();
   const isAnalyze = pathname === "/analyze";
+  const isHome = pathname === "/";
 
   if (isAnalyze) {
     return <div className="pt-14 sm:pt-16 lg:pt-20 pb-14 sm:pb-16 lg:pb-20">{children}</div>;
+  }
+
+  if (isHome) {
+    return <div>{children}</div>;
   }
 
   return (

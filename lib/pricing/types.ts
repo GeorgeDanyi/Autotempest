@@ -28,6 +28,8 @@ export type PriceApiResponse = {
   median_price_czk: number | null;
   p25_price_czk: number | null;
   p75_price_czk: number | null;
+  p10_price_czk?: number | null;
+  p90_price_czk?: number | null;
   min_price_czk: number | null;
   max_price_czk: number | null;
   fallback_used?: boolean;
@@ -42,6 +44,22 @@ export type PriceApiResponse = {
   dealLabel: DealScoreLabel;
   priceDeltaCzk: number | null;
   priceDeltaPct: number | null;
+  expanded_to?:
+    | {
+        type: "generation";
+        label: string;
+        yearFrom: number;
+        yearTo: number;
+      }
+    | {
+        type: "year_range";
+        yearFrom: number;
+        yearTo: number;
+      }
+    | {
+        type: "model_only";
+      }
+    | null;
 };
 
 /** Single source of truth for /analyze dashboard – derived from /api/price response. */
@@ -62,6 +80,8 @@ export type SharedAnalysisResult = {
   median_price_czk: number | null;
   p25_price_czk: number | null;
   p75_price_czk: number | null;
+  p10_price_czk?: number | null;
+  p90_price_czk?: number | null;
   min_price_czk: number | null;
   max_price_czk: number | null;
 };

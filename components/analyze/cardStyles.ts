@@ -5,11 +5,11 @@
 
 /** Základ karty – vizuálně jako GlassCard (bez motion) */
 export const ANALYZE_CARD =
-  "rounded-2xl border border-slate-200/70 bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-shadow duration-200 hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)]";
+  "rounded-2xl border border-slate-200/70 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-shadow duration-200 hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)]";
 
 /** Karta s levým akcentem */
 export const ANALYZE_CARD_ACCENT =
-  "rounded-2xl border-l-4 border-l-sky-500 border border-slate-200/70 bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-shadow duration-200 hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)]";
+  "rounded-2xl border-l-4 border-l-sky-500 border border-slate-200/70 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-shadow duration-200 hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)]";
 
 /** Jednotný vnitřní padding karet – dost prostoru ze všech stran */
 export const ANALYZE_CARD_PADDING = "p-6 sm:p-7";

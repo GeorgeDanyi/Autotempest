@@ -118,7 +118,10 @@
 
 @layer base {
   * {
-    @apply border-neutral-200 outline-ring/50;
+    @apply border-neutral-200;
+  }
+  *:focus-visible {
+    @apply outline-ring/50;
   }
   body {
     @apply bg-white text-neutral-900;
@@ -134,4 +137,26 @@
   .text-muted-foreground {
     @apply text-neutral-500;
   }
+}
+
+.recharts-bar-background-rectangle {
+  fill: transparent !important;
+  opacity: 0 !important;
+}
+
+.model-comparison-chart .recharts-bar-rectangle,
+.price-radar-chart .recharts-bar-rectangle {
+  transition: fill-opacity 140ms ease-out, stroke 140ms ease-out, stroke-width 140ms ease-out;
+}
+
+.model-comparison-chart .recharts-bar-rectangle:hover {
+  fill-opacity: 0.95 !important;
+  stroke: rgba(15, 23, 42, 0.16);
+  stroke-width: 1.2px;
+}
+
+.price-radar-chart .recharts-bar-rectangle:hover {
+  fill-opacity: 0.95 !important;
+  stroke: rgba(15, 23, 42, 0.16);
+  stroke-width: 1.2px;
 }

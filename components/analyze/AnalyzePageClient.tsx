@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  Activity,
   ArrowDownRight,
   Car,
   ChevronDown,
@@ -20,10 +19,11 @@ import { GlassCard } from "@/components/price-trends/GlassCard";
 import { PriceTrendChartCard } from "@/components/analyze/PriceTrendChartCard";
 import { PriceDistributionCard } from "@/components/analyze/PriceDistributionCard";
 import { MileageScatterCard } from "@/components/analyze/MileageScatterCard";
-import { DealScoreCard } from "@/components/analyze/DealScoreCard";
-import { MarketInsightsCard } from "@/components/analyze/MarketInsightsCard";
-import { PriceRadarCard } from "@/components/analyze/PriceRadarCard";
+import { BuyerCard } from "@/components/analyze/BuyerCard";
+import { SellerCard } from "@/components/analyze/SellerCard";
+import { FlipperCard } from "@/components/analyze/FlipperCard";
 import { MethodologySection } from "@/components/analyze/MethodologySection";
+import { ANALYZE_CARD, ANALYZE_CARD_PADDING, CARD_LABEL } from "@/components/analyze/cardStyles";
 import { Container } from "@/components/layout/primitives";
 import type { PriceApiResponse, SharedAnalysisResult } from "@/lib/pricing/types";
 import { formatCurrencyCZK } from "@/lib/ui";
@@ -37,7 +37,6 @@ import {
 import { validateAnalyzeRanges } from "@/lib/analyze/validateAnalyzeRanges";
 import { resolveAnalyzeFilterState } from "@/lib/analyze/resolveAnalyzeFilterState";
 import type { FilterOptionsResponse } from "@/app/api/analyze/filter-options/route";
-
 function toSharedAnalysisResult(data: PriceApiResponse | null): SharedAnalysisResult | null {
   if (!data?.ok || !data.model_key) return null;
   return {
@@ -57,6 +56,8 @@ function toSharedAnalysisResult(data: PriceApiResponse | null): SharedAnalysisRe
     median_price_czk: data.median_price_czk ?? null,
     p25_price_czk: data.p25_price_czk ?? null,
     p75_price_czk: data.p75_price_czk ?? null,
+    p10_price_czk: data.p10_price_czk ?? null,
+    p90_price_czk: data.p90_price_czk ?? null,
     min_price_czk: data.min_price_czk ?? null,
     max_price_czk: data.max_price_czk ?? null,
   };
@@ -89,7 +90,7 @@ function engineLabelFromParam(engineKey: string | null): string | null {
 }
 
 const SECTION_LABEL = "text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400";
-const IS_DEV = process.env.NODE_ENV !== "production";
+const IS_DEV = false;
 const DEVTOOLS_ENABLED =
   process.env.NODE_ENV === "development" ||
   process.env.NEXT_PUBLIC_ENABLE_DEVTOOLS === "true";
@@ -259,7 +260,9 @@ export function AnalyzePageClient() {
       modelLabel: resolvedFilters.modelLabel,
       yearLabel:
         parsed.yearFrom && parsed.yearTo
-          ? `${parsed.yearFrom}–${parsed.yearTo}`
+          ? parsed.yearFrom === parsed.yearTo
+            ? parsed.yearFrom
+            : `${parsed.yearFrom}–${parsed.yearTo}`
           : parsed.yearFrom ?? parsed.yearTo ?? null,
       engineLabel: engineLabelFromParam(parsed.engine),
     }),
@@ -683,20 +686,20 @@ export function AnalyzePageClient() {
   }, [paramsKey, parsed, filterOptions]);
 
   const analysisResult = useMemo(() => toSharedAnalysisResult(analysis.data ?? null), [analysis.data]);
+  const priceData = analysis.data as PriceApiResponse | null;
 
   const fairPrice = analysisResult?.median_price_czk ?? null;
   const p25Price = analysisResult?.p25_price_czk ?? null;
   const p75Price = analysisResult?.p75_price_czk ?? null;
   const minPrice = analysisResult?.min_price_czk ?? null;
+  const avgMileageKm = (analysis.data as Record<string, unknown>)
+    ?.avg_mileage_km as number | null ?? null;
   const maxPrice = analysisResult?.max_price_czk ?? null;
   const sampleSize = analysisResult?.sample_size ?? null;
   const confidenceScore = analysisResult?.confidence_score ?? null;
   const confidenceLabel = analysisResult?.confidence_label ?? null;
   const dataQualityNote = analysisResult?.data_quality_note ?? null;
   const heroConfidenceLabel = confidenceLabel ?? (sampleSize != null ? "–" : "–");
-  const effectiveFairPrice = fairPrice ?? 359_000;
-  const effectiveLowPrice = minPrice ?? (p25Price != null && fairPrice != null ? Math.max(Math.round(p25Price - (fairPrice - p25Price)), 0) : 289_000);
-  const effectiveHighPrice = maxPrice ?? (p75Price != null && fairPrice != null ? Math.round(p75Price + (p75Price - fairPrice)) : 439_000);
   const marketState =
     sampleSize == null || sampleSize < 5 ? { label: "Málo dat", description: "Zatím málo inzerátů." }
     : sampleSize < 20 ? { label: "Řídký trh", description: "Méně nabídek – ceny mohou kolísat." }
@@ -704,10 +707,11 @@ export function AnalyzePageClient() {
     : { label: "Stabilní", description: "Silný a likvidní trh." };
   const trendLabel = sampleSize == null || sampleSize < 5 ? "–" : sampleSize < 20 ? "–" : sampleSize < 60 ? "–" : "–";
   const segmentTitle = context.modelLabel && context.engineLabel ? `${context.modelLabel} ${context.engineLabel}` : context.modelLabel ?? "Vyber segment";
+  const mileageExpanded = priceData?.expanded_to != null && (parsed.mileageFrom || parsed.mileageTo);
   const secondaryFiltersParts = [
     context.yearLabel ? `Rok ${context.yearLabel}` : null,
     currentMileageFromLabel !== LIBOVOLNE || currentMileageToLabel !== LIBOVOLNE
-      ? `Nájezd ${currentMileageFromLabel !== LIBOVOLNE ? `od ${currentMileageFromLabel}` : ""}${currentMileageFromLabel !== LIBOVOLNE && currentMileageToLabel !== LIBOVOLNE ? " " : ""}${currentMileageToLabel !== LIBOVOLNE ? `do ${currentMileageToLabel}` : ""}`.trim()
+      ? `Nájezd ${currentMileageFromLabel !== LIBOVOLNE ? `od ${currentMileageFromLabel}` : ""}${currentMileageFromLabel !== LIBOVOLNE && currentMileageToLabel !== LIBOVOLNE ? " " : ""}${currentMileageToLabel !== LIBOVOLNE ? `do ${currentMileageToLabel}` : ""}${mileageExpanded ? " (rozšířeno)" : ""}`.trim()
       : null,
     currentFuelLabel !== LIBOVOLNE ? currentFuelLabel : null,
   ].filter(Boolean);
@@ -725,6 +729,16 @@ export function AnalyzePageClient() {
     currentFuelLabel !== LIBOVOLNE ? currentFuelLabel : null,
   ].filter(Boolean);
 
+  const month = new Date().getMonth();
+  const seasonLabel =
+    month >= 2 && month <= 4
+      ? "Pozor — jaro zdražuje"
+      : month >= 9 && month <= 10
+        ? "Vhodná chvíle — podzim zlevňuje"
+        : "Neutrální období";
+  const seasonShort =
+    month >= 2 && month <= 4 ? "Zdražuje" : month >= 9 && month <= 10 ? "Zlevňuje" : "Neutrální";
+
   return (
     <div className="relative min-h-screen">
       {/* Background blobs */}
@@ -735,7 +749,7 @@ export function AnalyzePageClient() {
       </div>
 
       {/* Sticky SaaS header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
+      <header className="relative border-b border-slate-200/80 bg-white">
         <Container className="py-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
@@ -819,7 +833,7 @@ export function AnalyzePageClient() {
 
         {/* Hero: férová cena */}
         <section aria-label="Férová cena" className="pt-8">
-          <GlassCard className="p-6 sm:p-7" noHoverEffect>
+          <div className={`${ANALYZE_CARD} px-8 py-8`}>
             {analysis.loading && !analysis.data ? (
               <div className="flex flex-wrap items-center gap-4">
                 <div className="h-10 w-48 animate-pulse rounded bg-slate-200" />
@@ -831,101 +845,199 @@ export function AnalyzePageClient() {
                 <p className="mt-1 text-slate-600">{analysis.error}</p>
               </div>
             ) : (
-            <div className="flex flex-wrap items-start justify-between gap-5">
-              <div>
-                <p className={SECTION_LABEL}>
-                  {analysisResult?.segment_mode === "fallback"
-                    ? "Odhad ceny z nejbližšího segmentu"
-                    : "Férová cena segmentu"}
-                </p>
-                <p className="mt-1.5 font-mono text-3xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-4xl">
-                  {fairPrice != null ? formatCurrencyCZK(fairPrice) : "–"}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {analysisResult?.segment_mode === "fallback"
-                    ? "Výsledek je odhad z nejbližšího dostupného segmentu."
-                    : "Odhad dle aktuálního trhu ojetin v ČR"}
-                </p>
-                {analysisResult?.segment_mode === "fallback" && (
-                  <p className="mt-2 inline-block rounded border border-amber-200 bg-amber-50/80 px-2 py-1 text-[11px] font-medium text-amber-800">
-                    Náhradní segment
+              <>
+                <div className="flex items-center justify-between">
+                  <p className={CARD_LABEL}>Férová cena segmentu</p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        sampleSize != null && sampleSize >= 20 ? "bg-emerald-400" : "bg-amber-400"
+                      }`}
+                    />
+                    <span
+                      className={`text-[11px] font-medium ${
+                        sampleSize != null && sampleSize >= 20 ? "text-emerald-600" : "text-amber-600"
+                      }`}
+                    >
+                      {sampleSize != null && sampleSize >= 50
+                        ? "Aktivní trh"
+                        : sampleSize != null && sampleSize >= 20
+                          ? "Normální trh"
+                          : sampleSize != null && sampleSize >= 5
+                            ? "Řídký trh"
+                            : "Málo dat"}
+                      {sampleSize != null ? ` · ${sampleSize} inzerátů` : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-baseline gap-3">
+                  <p className="tabular-nums text-[68px] font-semibold leading-none tracking-[-3px] text-slate-900">
+                    {fairPrice != null ? fairPrice.toLocaleString("cs-CZ") : "—"}
                   </p>
+                  <p className="pb-2 text-2xl font-normal text-slate-400">Kč</p>
+                  {fairPrice != null && (
+                    <span
+                      className={`mb-2 inline-flex items-center self-end rounded-full px-3 py-1 text-[11px] font-semibold ring-1 ${
+                        fairPrice < (p25Price ?? Infinity)
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                          : fairPrice <= (p75Price ?? Infinity)
+                            ? "bg-sky-50 text-sky-700 ring-sky-200"
+                            : "bg-amber-50 text-amber-700 ring-amber-200"
+                      }`}
+                    >
+                      {fairPrice < (p25Price ?? Infinity)
+                        ? "Levná cena"
+                        : fairPrice <= (p75Price ?? Infinity)
+                          ? "Férová cena"
+                          : "Vysoká cena"}
+                    </span>
+                  )}
+                </div>
+
+                <div className="my-7 h-px bg-slate-100" />
+
+                {fairPrice != null && p25Price != null && p75Price != null && minPrice != null && maxPrice != null && (
+                  <div className="relative pb-14">
+                    <div className="flex h-1.5 w-full overflow-hidden rounded-full">
+                      <div className="flex-1 bg-emerald-100" />
+                      <div className="flex-1 bg-sky-100" />
+                      <div className="flex-1 bg-red-100" />
+                    </div>
+
+                    <div
+                      className="absolute left-0 top-0 flex flex-col items-center"
+                      style={{ transform: "translateX(-50%)" }}
+                    >
+                      <div className="mt-[2px] h-3 w-px bg-slate-300" />
+                      <p className="mt-1 whitespace-nowrap text-[10px] text-slate-400">
+                        {minPrice.toLocaleString("cs-CZ")} Kč
+                      </p>
+                      <p className="text-[10px] text-slate-400">Min</p>
+                    </div>
+
+                    <div
+                      className="absolute top-0 flex flex-col items-center"
+                      style={{ left: "25%", transform: "translateX(-50%)" }}
+                    >
+                      <div className="mt-[2px] h-3 w-0.5 bg-emerald-500" />
+                      <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-emerald-700">
+                        {p25Price.toLocaleString("cs-CZ")} Kč
+                      </p>
+                      <p className="whitespace-nowrap text-[10px] text-emerald-600">Dolní čtvrtina</p>
+                    </div>
+
+                    <div
+                      className="absolute top-0 flex flex-col items-center"
+                      style={{ left: "50%", transform: "translateX(-50%)" }}
+                    >
+                      <div className="-mt-[5px] h-4 w-4 rounded-full border-[3px] border-white bg-sky-500" />
+                      <p className="mt-1.5 whitespace-nowrap text-[12px] font-semibold text-sky-600">
+                        {fairPrice.toLocaleString("cs-CZ")} Kč
+                      </p>
+                      <p className="whitespace-nowrap text-[10px] text-sky-500">Medián · střed trhu</p>
+                    </div>
+
+                    <div
+                      className="absolute top-0 flex flex-col items-center"
+                      style={{ left: "75%", transform: "translateX(-50%)" }}
+                    >
+                      <div className="mt-[2px] h-3 w-0.5 bg-red-400" />
+                      <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-red-700">
+                        {p75Price.toLocaleString("cs-CZ")} Kč
+                      </p>
+                      <p className="whitespace-nowrap text-[10px] text-red-500">Horní čtvrtina</p>
+                    </div>
+
+                    <div
+                      className="absolute right-0 top-0 flex flex-col items-center"
+                      style={{ transform: "translateX(50%)" }}
+                    >
+                      <div className="mt-[2px] h-3 w-px bg-slate-300" />
+                      <p className="mt-1 whitespace-nowrap text-[10px] text-slate-400">
+                        {maxPrice.toLocaleString("cs-CZ")} Kč
+                      </p>
+                      <p className="text-[10px] text-slate-400">Max</p>
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div className="flex flex-wrap gap-5 border-l border-slate-200/70 pl-5">
-                <div>
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400"><Gauge className="h-3 w-3" />{heroConfidenceLabel}</p>
-                  <p className="mt-1 font-mono text-base font-semibold text-slate-900">{sampleSize != null ? sampleSize.toLocaleString("cs-CZ") : "–"}</p>
-                  <p className="text-[11px] text-slate-500">inz.</p>
+
+                <div className="h-px bg-slate-100" />
+
+                <div className="mt-6 grid grid-cols-4 gap-4">
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className={CARD_LABEL}>Inzerátů</p>
+                    <p className="mt-1.5 text-base font-semibold text-slate-800">
+                      {sampleSize ?? "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">aktivní dnes</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className={CARD_LABEL}>Průměrný nájezd</p>
+                    <p className="mt-1.5 text-base font-semibold text-slate-800">
+                      {avgMileageKm != null
+                        ? `${Math.round(avgMileageKm / 1000)} tis. km`
+                        : '—'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">těžiště segmentu</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className={CARD_LABEL}>Férové pásmo</p>
+                    <p className="mt-1.5 text-base font-semibold text-slate-800">
+                      {p25Price != null && p75Price != null
+                        ? `${Math.round(p25Price / 1000)}k – ${Math.round(p75Price / 1000)}k Kč`
+                        : "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">P25 až P75</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className={CARD_LABEL}>Aktualizováno</p>
+                    <p className="mt-1.5 text-base font-semibold text-slate-800">Dnes</p>
+                    <p className="mt-1 truncate text-[11px] text-slate-400">
+                      {context.modelLabel ?? ""}
+                      {context.yearLabel ? ` · ${context.yearLabel}` : ""}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">P25–P75</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-slate-900">{p25Price != null && p75Price != null ? `${formatCurrencyCZK(p25Price)} – ${formatCurrencyCZK(p75Price)}` : "–"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Vývoj</p>
-                  <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-slate-100/90 px-2.5 py-1 font-mono text-xs font-semibold text-slate-800"><ArrowDownRight className="h-3 w-3" />{trendLabel}</p>
-                </div>
-              </div>
-            </div>
+              </>
             )}
-          </GlassCard>
+          </div>
         </section>
 
-        {/* Přehled – 3 karty přímo pod férovou cenou */}
-        <section aria-label="Přehled" className="pt-10 lg:pt-12">
+        <section aria-label="Akční přehled" className="pt-10 lg:pt-12">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-6 lg:gap-8">
-            <GlassCard className="flex items-center gap-4 p-5 sm:p-6" noHoverEffect>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100/90 text-slate-600"><Activity className="h-5 w-5" /></div>
-              <div className="min-w-0">
-                <p className={SECTION_LABEL}>Stav trhu</p>
-                <p className="mt-1 font-semibold text-slate-900 text-sm">{marketState.label}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{marketState.description}</p>
-              </div>
-            </GlassCard>
-            <DealScoreCard
+            <BuyerCard
+              medianPrice={analysisResult?.median_price_czk ?? null}
+              p25Price={analysisResult?.p25_price_czk ?? null}
+              p75Price={analysisResult?.p75_price_czk ?? null}
+              sampleSize={sampleSize}
               modelLabel={context.modelLabel}
               yearLabel={context.yearLabel}
-              engineLabel={context.engineLabel}
-              dealScore={analysis.data?.deal_score ?? analysis.data?.dealScore ?? null}
-              dealLabel={analysis.data?.deal_label ?? analysis.data?.dealLabel ?? null}
             />
-            <GlassCard className="flex items-center gap-4 p-5 sm:p-6" noHoverEffect>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100/90 text-slate-600"><Database className="h-5 w-5" /></div>
-              <div className="min-w-0">
-                <p className={SECTION_LABEL}>Kvalita dat</p>
-                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-slate-900">{confidenceScore != null ? `${confidenceScore} %` : "–"}</p>
-                <p className="mt-0.5 text-xs text-slate-600">{confidenceLabel ?? "–"}</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">{sampleSize != null ? `${sampleSize.toLocaleString("cs-CZ")} inz.` : "–"}</p>
-                {dataQualityNote && <p className="mt-1 text-[11px] text-slate-500">{dataQualityNote}</p>}
-                {confidenceScore != null && confidenceScore < 40 && (
-                  <p className="mt-2 text-[11px] text-amber-600">Výsledek je orientační – doporučujeme brát v potaz s rezervou.</p>
-                )}
-              </div>
-            </GlassCard>
+            <SellerCard
+              medianPrice={analysisResult?.median_price_czk ?? null}
+              p25Price={analysisResult?.p25_price_czk ?? null}
+              p75Price={analysisResult?.p75_price_czk ?? null}
+              sampleSize={sampleSize}
+            />
+            <FlipperCard
+              medianPrice={analysisResult?.median_price_czk ?? null}
+              p25Price={analysisResult?.p25_price_czk ?? null}
+              p75Price={analysisResult?.p75_price_czk ?? null}
+              sampleSize={sampleSize}
+            />
           </div>
         </section>
 
-        {/* Data & grafy – všechny karty z jednoho analysisResult */}
         <section className="pt-12 lg:pt-14">
-          <p className={SECTION_LABEL}>Data & grafy</p>
+          <p className={SECTION_LABEL}>Analýza trhu</p>
           <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
             <div className="lg:col-span-8">
-              <PriceTrendChartCard analysisResult={analysisResult} />
+              <MileageScatterCard analysisResult={analysisResult} />
             </div>
-            <div className="lg:col-span-4 flex flex-col gap-6">
-              <PriceRadarCard analysisResult={analysisResult} />
-              <MarketInsightsCard modelLabel={context.modelLabel} analysisResult={analysisResult} />
+            <div className="lg:col-span-4">
+              <PriceDistributionCard analysisResult={analysisResult} />
             </div>
-          </div>
-        </section>
-
-        {/* Struktura trhu */}
-        <section className="pt-12 lg:pt-14">
-          <p className={SECTION_LABEL}>Struktura trhu</p>
-          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
-            <PriceDistributionCard analysisResult={analysisResult} />
-            <MileageScatterCard analysisResult={analysisResult} />
           </div>
         </section>
 

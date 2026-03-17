@@ -11,6 +11,7 @@ import { buildModelKey } from "@/lib/ingest/textNormalize";
 import { detectEngineKey } from "@/lib/ingest/detectEngineKey";
 import { normalizeModelKey } from "@/lib/cars/normalizeModel";
 import { normalizeBrandForDb } from "@/lib/analyze/normalizeBrandKey";
+import { ALL_YEAR_BUCKETS } from "@/lib/pricing/buckets";
 
 const SAUTO_URL = "https://www.sauto.cz/inzerce/osobni";
 const DEFAULT_PAGES = 3;
@@ -68,25 +69,39 @@ export async function fetchSautoPages(params: {
   pages: number;
   brand?: string | null;
   model?: string | null;
+  priceFrom?: number | null;
+  priceTo?: number | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
 }): Promise<{
   allParsed: SautoParsedListing[];
   pagesFetched: number;
   errors: string[];
   timedOut: boolean;
 }> {
-  const { pages, brand, model } = params;
+  const { pages, brand, model, priceFrom, priceTo, yearFrom, yearTo } = params;
 
   const pagesClamped = Number.isFinite(pages) && pages > 0 ? pages : DEFAULT_PAGES;
 
-  const baseUrl = new URL(SAUTO_URL);
-  if (brand) baseUrl.searchParams.set("znacka", brand);
-  if (model) baseUrl.searchParams.set("model", model);
-
   const urls: string[] = [];
-  for (let i = 0; i < pagesClamped; i++) {
-    const urlObj = new URL(baseUrl);
-    if (i > 0) {
-      urlObj.searchParams.set("page", String(i + 1));
+  for (let i = 1; i <= pagesClamped; i++) {
+    const urlObj = new URL(SAUTO_URL);
+    if (brand) urlObj.searchParams.set("znacka", brand);
+    if (model) urlObj.searchParams.set("model", model);
+    urlObj.searchParams.set("razeni", "datum");
+    urlObj.searchParams.set("pouze-soukrome", "1");
+    urlObj.searchParams.set("stav", "ojete");
+    urlObj.searchParams.set("typ", "osobni");
+    if (priceFrom != null && priceFrom > 0) {
+      urlObj.searchParams.set("cena-od", String(priceFrom));
+    }
+    if (priceTo != null && priceTo < 99_999_999) {
+      urlObj.searchParams.set("cena-do", String(priceTo));
+    }
+    if (yearFrom != null) urlObj.searchParams.set("rok-od", String(yearFrom));
+    if (yearTo != null) urlObj.searchParams.set("rok-do", String(yearTo));
+    if (i > 1) {
+      urlObj.searchParams.set("page", String(i));
     }
     urls.push(urlObj.toString());
   }
@@ -95,13 +110,53 @@ export async function fetchSautoPages(params: {
   const errors: string[] = [];
   let pagesFetched = 0;
   let timedOut = false;
+  const seenIds = new Set<string>();
 
-  for (const url of urls) {
+  for (let pageIndex = 0; pageIndex < urls.length; pageIndex++) {
+    const url = urls[pageIndex]!;
     try {
       const html = await fetchWithTimeout(url, 10_000);
       const parsedPage = parseSautoList(html);
+      console.log(
+        "[sauto][fetch]",
+        "url:",
+        url,
+        "html length:",
+        html.length,
+        "parsed:",
+        parsedPage.length,
+      );
+      const ids = parsedPage
+        .map((p) => p.source_listing_id)
+        .filter((id): id is string => Boolean(id));
+      console.log(
+        `[sauto][page${pageIndex + 1}] ids (${ids.length}):`,
+        ids.join(","),
+      );
+      const newIds = ids
+        .map((p) => (typeof p === "string" ? p : (p as { source_listing_id?: string }).source_listing_id))
+        .filter((id): id is string => Boolean(id));
+      const uniqueNewIds = newIds.filter((id) => !seenIds.has(id));
+      newIds.forEach((id) => seenIds.add(id));
+
       allParsed.push(...parsedPage);
       pagesFetched += 1;
+
+      if (parsedPage.length === 0) {
+        console.log("[sauto][fetch] empty page, stopping pagination");
+        break;
+      }
+      console.log(
+        `[sauto][page${pagesFetched}][ids]:`,
+        parsedPage.map((p) => p.source_listing_id).join(","),
+      );
+
+      if (pagesFetched >= 5 && uniqueNewIds.length < 3) {
+        console.log(
+          `[sauto][fetch] stránka ${pagesFetched} přinesla jen ${uniqueNewIds.length} nových, ukončuji`,
+        );
+        break;
+      }
     } catch (e: any) {
       const msg = e?.message ?? "fetch failed";
       if (
@@ -374,15 +429,39 @@ export async function ingestSautoPages(params: {
       ? params.pagesRequested
       : DEFAULT_PAGES;
 
-  const { allParsed, pagesFetched, errors } = await fetchSautoPages({
-    pages: pagesRequestedClamped,
-    brand: params.brand,
-    model: params.model,
-  });
+  const allParsedBuckets: SautoParsedListing[] = [];
+  let pagesFetched = 0;
+  const errors: string[] = [];
+
+  const { SAUTO_PRICE_BUCKETS, SAUTO_YEAR_BUCKETS } = await import(
+    "@/lib/ingest/sauto/priceBuckets"
+  );
+
+  for (const yearBucket of SAUTO_YEAR_BUCKETS) {
+    for (const priceBucket of SAUTO_PRICE_BUCKETS) {
+      console.log(
+        `[ingestSautoPages][bucket] rok=${yearBucket.od}-${yearBucket.do} cena=${priceBucket.od}-${priceBucket.do}`,
+      );
+      const { allParsed, pagesFetched: bucketPages, errors: bucketErrors } =
+        await fetchSautoPages({
+          pages: pagesRequestedClamped,
+          brand: params.brand,
+          model: params.model,
+          priceFrom: priceBucket.od,
+          priceTo: priceBucket.do,
+          yearFrom: yearBucket.od,
+          yearTo: yearBucket.do,
+        });
+      allParsedBuckets.push(...allParsed);
+      pagesFetched += bucketPages;
+      errors.push(...bucketErrors);
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
 
   // deduplikace podle source_listing_id
   const bySourceId = new Map<string, SautoParsedListing>();
-  for (const p of allParsed) {
+  for (const p of allParsedBuckets) {
     const id = p.source_listing_id;
     if (!id) continue;
     if (!bySourceId.has(id)) {
@@ -464,16 +543,7 @@ export async function ingestSautoPages(params: {
         ),
       ).slice(0, 5);
 
-      const bucketsForRebuild: string[] = [
-        "all",
-        "year_2016_plus",
-        "year_2016_plus__mileage_0_50k",
-        "year_2016_plus__mileage_50_100k",
-        "year_2016_plus__mileage_100_150k",
-        "year_2016_plus__mileage_150_200k",
-        "year_2016_plus__mileage_200_250k",
-        "year_2016_plus__mileage_250k_plus",
-      ];
+      const bucketsForRebuild: string[] = ["all", ...ALL_YEAR_BUCKETS];
 
       for (const model_key of modelKeysForRebuild) {
         for (const bucket of bucketsForRebuild) {
@@ -512,7 +582,7 @@ export async function ingestSautoPages(params: {
     ok: true,
     pagesRequested: pagesRequestedClamped,
     pagesFetched,
-    parsedTotal: allParsed.length,
+    parsedTotal: allParsedBuckets.length,
     parsedUnique: parsedUnique.length,
     parsed: parsedUnique.length,
     prepared: parsedUnique.length,
@@ -637,40 +707,27 @@ async function main(): Promise<void> {
 
   // --bulk <N>: fetch list pages once, parse, dedupe, upsert first N (list pages only, no detail)
   if (bulk != null && bulk > 0) {
-    const { allParsed, pagesFetched, errors: fetchErrors } = await fetchSautoPages({
-      pages,
+    const result = await ingestSautoPages({
+      pagesRequested: pages,
       brand,
       model,
     });
-
-    const byId = new Map<string, SautoParsedListing>();
-    for (const p of allParsed) {
-      const sid = p.source_listing_id;
-      if (sid && !byId.has(sid)) byId.set(sid, p);
-    }
-    const unique = Array.from(byId.values()).slice(0, bulk);
-    let inserted = 0;
-    let skippedExisting = 0;
-
-    const supabase = getSupabaseAdmin();
-    for (let i = 0; i < unique.length; i++) {
-      const result = await upsertMarketObservationFromParsedListing(
-        supabase,
-        unique[i],
+    console.error(
+      `[ingestSautoBulk] pagesRequested=${result.pagesRequested} pagesFetched=${result.pagesFetched}`,
+    );
+    console.error(
+      `[ingestSautoBulk] parsedTotal=${result.parsedTotal} parsedUnique=${result.parsedUnique}`,
+    );
+    console.error(
+      `[ingestSautoBulk] insertedApprox=${result.insertedApprox}`,
+    );
+    console.error(
+      `[ingestSautoBulk] rebuiltBuckets=${result.rebuilt.length}`,
+    );
+    if (result.errors.length > 0) {
+      console.error(
+        `[ingestSautoBulk] errorsCount=${result.errors.length}`,
       );
-      if (result.ok) inserted += 1;
-      else if (result.skipped) skippedExisting += 1;
-      if ((i + 1) % 10 === 0) {
-        console.error(`[ingestSautoSingle] progress: ${i + 1}/${unique.length}`);
-      }
-    }
-
-    console.error(`[ingestSautoBulk] pagesFetched=${pagesFetched}`);
-    console.error(`[ingestSautoBulk] parsedListings=${unique.length}`);
-    console.error(`[ingestSautoBulk] inserted=${inserted}`);
-    console.error(`[ingestSautoBulk] skippedExisting=${skippedExisting}`);
-    if (fetchErrors.length > 0) {
-      console.error(`[ingestSautoBulk] fetchErrors=${fetchErrors.length}`);
     }
     process.exit(0);
   }

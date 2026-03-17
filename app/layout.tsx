@@ -32,7 +32,7 @@ export default function RootLayout({
       >
         <div className="flex min-h-screen flex-col">
           <SiteHeader />
-          <main className="flex-1 overflow-x-hidden">
+          <main className="flex-1 overflow-x-hidden" style={{ willChange: "transform" }}>
             <MainContent>{children}</MainContent>
           </main>
         </div>

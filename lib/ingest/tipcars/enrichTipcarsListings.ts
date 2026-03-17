@@ -46,7 +46,8 @@ function mergeDetailIntoListing(
  * Vrací obohacené listy a statistiky pro logging.
  */
 export async function enrichTipcarsListings(
-  listings: TipcarsParsedListing[]
+  listings: TipcarsParsedListing[],
+  concurrency: number = 5
 ): Promise<{
   enriched: TipcarsParsedListing[];
   stats: EnrichTipcarsStats;
@@ -63,36 +64,57 @@ export async function enrichTipcarsListings(
     enriched_transmission_count: 0,
   };
 
-  const enriched: TipcarsParsedListing[] = [];
+  const enriched: TipcarsParsedListing[] = new Array(listings.length);
+  const batchSize = Math.max(1, concurrency);
+  let processed = 0;
 
-  for (const list of listings) {
-    if (!list.url) {
-      enriched.push(list);
-      continue;
+  for (let i = 0; i < listings.length; i += batchSize) {
+    const tasks: Promise<void>[] = [];
+    for (let j = 0; j < batchSize; j++) {
+      const idx = i + j;
+      if (idx >= listings.length) break;
+      const list = listings[idx];
+      tasks.push(
+        (async () => {
+          if (!list.url) {
+            enriched[idx] = list;
+            return;
+          }
+
+          stats.detail_fetch_attempted += 1;
+          const fetchResult = await fetchTipcarsDetail(list.url);
+
+          if (!fetchResult.ok) {
+            stats.detail_fetch_failed += 1;
+            enriched[idx] = list;
+            return;
+          }
+          stats.detail_fetch_succeeded += 1;
+
+          const detailData = parseTipcarsDetail(fetchResult.html);
+          const merged = mergeDetailIntoListing(list, detailData);
+          enriched[idx] = merged;
+
+          if (list.mileage_km == null && merged.mileage_km != null)
+            stats.enriched_mileage_count += 1;
+          if (list.engine_raw == null && merged.engine_raw != null)
+            stats.enriched_engine_count += 1;
+          if (list.year == null && merged.year != null)
+            stats.enriched_year_count += 1;
+          if (list.fuel == null && merged.fuel != null)
+            stats.enriched_fuel_count += 1;
+          if (list.transmission == null && merged.transmission != null)
+            stats.enriched_transmission_count += 1;
+        })(),
+      );
     }
-
-    stats.detail_fetch_attempted += 1;
-    const fetchResult = await fetchTipcarsDetail(list.url);
-
-    if (!fetchResult.ok) {
-      stats.detail_fetch_failed += 1;
-      enriched.push(list);
-      continue;
+    await Promise.all(tasks);
+    processed = Math.min(processed + tasks.length, listings.length);
+    if (processed > 0 && processed % 50 === 0) {
+      console.log(
+        `[ingest][tipcars] enriched ${processed}/${listings.length}`,
+      );
     }
-    stats.detail_fetch_succeeded += 1;
-
-    const detailData = parseTipcarsDetail(fetchResult.html);
-    const merged = mergeDetailIntoListing(list, detailData);
-    enriched.push(merged);
-
-    if (list.mileage_km == null && merged.mileage_km != null)
-      stats.enriched_mileage_count += 1;
-    if (list.engine_raw == null && merged.engine_raw != null)
-      stats.enriched_engine_count += 1;
-    if (list.year == null && merged.year != null) stats.enriched_year_count += 1;
-    if (list.fuel == null && merged.fuel != null) stats.enriched_fuel_count += 1;
-    if (list.transmission == null && merged.transmission != null)
-      stats.enriched_transmission_count += 1;
   }
 
   return { enriched, stats };

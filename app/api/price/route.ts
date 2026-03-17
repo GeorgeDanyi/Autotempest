@@ -16,6 +16,7 @@ import {
 import { normalizeBrandKey } from "@/lib/analyze/normalizeBrandKey";
 import { validateAnalyzeRanges } from "@/lib/analyze/validateAnalyzeRanges";
 import { parseBucketToFilters } from "@/lib/pricing/bucketFilters";
+import { findGeneration } from "@/lib/pricing/generationMap";
 
 export const runtime = "nodejs";
 
@@ -277,10 +278,29 @@ export async function GET(req: NextRequest) {
     let stats: IndexRow | null = null;
     let fallback_used = false;
     let statsFromCache = false;
+    let expanded_to:
+      | null
+      | {
+          type: "generation";
+          label: string;
+          yearFrom: number;
+          yearTo: number;
+        }
+      | {
+          type: "year_range";
+          yearFrom: number;
+          yearTo: number;
+        }
+      | {
+          type: "model_only";
+        } = null;
 
-    if (source_mode === "sauto_only") {
-      // Cache je sestaven z všech zdrojů; při sauto_only počítáme vždy z market_observations.
-      // Neskáčeme do cache, půjdeme do live path s filtrem source=sauto.
+    let sourceBreakdown: { sauto: number; tipcars: number } | null = null;
+    let avg_mileage_km: number | null = null;
+
+    if (source_mode === "sauto_only" || fuelParam != null) {
+      // Cache je sestaven z všech zdrojů; při sauto_only nebo při fuel filtru počítáme vždy z market_observations.
+      // Neskáčeme do cache, půjdeme do live path.
     } else {
       for (const bucket of fallbackChain) {
         const row = await fetchFromCache(bucket);
@@ -289,6 +309,33 @@ export async function GET(req: NextRequest) {
           resolved_bucket = bucket;
           fallback_used = bucket !== requested_bucket;
           statsFromCache = true;
+
+          // Výpočet avg_mileage_km z observations i při cache cestě
+          {
+            const bucketFilters = parseBucketToFilters(resolved_bucket);
+            let mileageQuery = supabase
+              .from("market_observations")
+              .select("mileage_km")
+              .eq("model_key", model_key)
+              .eq("active", true)
+              .not("mileage_km", "is", null)
+              .gt("mileage_km", 0);
+            if (bucketFilters?.yearFrom != null) mileageQuery = mileageQuery.gte("year", bucketFilters.yearFrom);
+            if (bucketFilters?.yearTo != null) mileageQuery = mileageQuery.lte("year", bucketFilters.yearTo);
+            if (bucketFilters?.mileageMin != null) mileageQuery = mileageQuery.gte("mileage_km", bucketFilters.mileageMin);
+            if (bucketFilters?.mileageMax != null) mileageQuery = mileageQuery.lt("mileage_km", bucketFilters.mileageMax);
+            if (yearFrom != null && !Number.isNaN(yearFrom)) mileageQuery = mileageQuery.gte("year", yearFrom);
+            if (yearTo != null && !Number.isNaN(yearTo)) mileageQuery = mileageQuery.lte("year", yearTo);
+            const { data: mileageRows } = await mileageQuery.limit(10_000);
+            const mv = (mileageRows ?? [])
+              .map((r: { mileage_km: number | null }) => r.mileage_km)
+              .filter((m): m is number => m != null && m > 0);
+            avg_mileage_km =
+              mv.length > 0
+                ? Math.round(mv.reduce((a, b) => a + b, 0) / mv.length)
+                : null;
+          }
+
           break;
         }
       }
@@ -298,8 +345,7 @@ export async function GET(req: NextRequest) {
       console.log("[api/price] resolved bucket", resolved_bucket, "from cache", !!stats);
     }
 
-    type ObsRow = { price_czk: number | null; source?: string | null };
-    let sourceBreakdown: { sauto: number; tipcars: number } | null = null;
+    type ObsRow = { price_czk: number | null; source?: string | null; mileage_km?: number | null };
 
     if (!stats) {
       const now = new Date();
@@ -308,7 +354,7 @@ export async function GET(req: NextRequest) {
 
       let obsQuery = supabase
         .from("market_observations")
-        .select("price_czk, source")
+        .select("price_czk, source, mileage_km")
         .eq("model_key", model_key)
         .eq("active", true)
         .gte("observed_at", sinceIso);
@@ -333,10 +379,128 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      const rows = (observations ?? []) as ObsRow[];
-      const prices = rows
+      let rows = (observations ?? []) as ObsRow[];
+      let prices = rows
         .map((row) => row.price_czk)
         .filter((n): n is number => n != null && Number.isFinite(n));
+
+      const canUseFallbacks =
+        prices.length < MIN_SAMPLE &&
+        (source_mode === "sauto_only" || fuelParam != null);
+
+      if (canUseFallbacks) {
+        const baseQuery = () =>
+          supabase
+            .from("market_observations")
+            .select("price_czk, source, mileage_km")
+            .eq("model_key", model_key)
+            .eq("active", true)
+            .gte("observed_at", sinceIso);
+
+        const recomputeFromRows = (r: ObsRow[]) =>
+          r
+            .map((row) => row.price_czk)
+            .filter((n): n is number => n != null && Number.isFinite(n));
+
+        const requestedYearForFallback =
+          singleYear ?? yearFrom ?? yearTo ?? null;
+
+        // Fallback 1: uvolni mileage a engine, zachovej fuel a rok
+        if (prices.length < MIN_SAMPLE) {
+          let q = baseQuery();
+          if (source_mode === "sauto_only") q = q.eq("source", "sauto");
+          if (yearFrom != null && !Number.isNaN(yearFrom)) q = q.gte("year", yearFrom);
+          if (yearTo != null && !Number.isNaN(yearTo)) q = q.lte("year", yearTo);
+          if (fuelParam) q = q.eq("fuel", fuelParam);
+
+          const { data } = await q;
+          const r = (data ?? []) as ObsRow[];
+          const p = recomputeFromRows(r);
+          if (p.length >= MIN_SAMPLE) {
+            rows = r;
+            prices = p;
+          }
+        }
+
+        // Fallback 2: uvolni fuel, zachovej rok
+        if (prices.length < MIN_SAMPLE) {
+          let q = baseQuery();
+          if (source_mode === "sauto_only") q = q.eq("source", "sauto");
+          if (yearFrom != null && !Number.isNaN(yearFrom)) q = q.gte("year", yearFrom);
+          if (yearTo != null && !Number.isNaN(yearTo)) q = q.lte("year", yearTo);
+
+          const { data } = await q;
+          const r = (data ?? []) as ObsRow[];
+          const p = recomputeFromRows(r);
+          if (p.length >= MIN_SAMPLE) {
+            rows = r;
+            prices = p;
+          }
+        }
+
+        // Fallback 3: rozšíř rok na celou generaci (findGeneration)
+        if (prices.length < MIN_SAMPLE && requestedYearForFallback != null) {
+          const gen = findGeneration(model_key, requestedYearForFallback);
+          if (gen) {
+            let q = baseQuery();
+            if (source_mode === "sauto_only") q = q.eq("source", "sauto");
+            q = q.gte("year", gen.from).lte("year", gen.to);
+
+            const { data } = await q;
+            const r = (data ?? []) as ObsRow[];
+            const p = recomputeFromRows(r);
+            if (p.length >= MIN_SAMPLE) {
+              rows = r;
+              prices = p;
+              expanded_to = {
+                type: "generation",
+                label: gen.label,
+                yearFrom: gen.from,
+                yearTo: gen.to,
+              };
+            }
+          }
+        }
+
+        // Fallback 4: rok ±2
+        if (prices.length < MIN_SAMPLE && requestedYearForFallback != null) {
+          const yrFrom = requestedYearForFallback - 2;
+          const yrTo = requestedYearForFallback + 2;
+          let q = baseQuery();
+          if (source_mode === "sauto_only") q = q.eq("source", "sauto");
+          q = q.gte("year", yrFrom).lte("year", yrTo);
+
+          const { data } = await q;
+          const r = (data ?? []) as ObsRow[];
+          const p = recomputeFromRows(r);
+          if (p.length >= MIN_SAMPLE) {
+            rows = r;
+            prices = p;
+            expanded_to = {
+              type: "year_range",
+              yearFrom: yrFrom,
+              yearTo: yrTo,
+            };
+          }
+        }
+
+        // Fallback 5: jen model bez roku
+        if (prices.length < MIN_SAMPLE) {
+          let q = baseQuery();
+          if (source_mode === "sauto_only") q = q.eq("source", "sauto");
+
+          const { data } = await q;
+          const r = (data ?? []) as ObsRow[];
+          const p = recomputeFromRows(r);
+          if (p.length >= MIN_SAMPLE) {
+            rows = r;
+            prices = p;
+            expanded_to = {
+              type: "model_only",
+            };
+          }
+        }
+      }
 
       if (prices.length < MIN_SAMPLE) {
         if (process.env.NODE_ENV === "development") {
@@ -348,7 +512,10 @@ export async function GET(req: NextRequest) {
           data: null,
           reason: "NO_DATA",
           sample_size: prices.length,
-          sample_size_by_source: source_mode === "sauto_only" ? { sauto: prices.length, tipcars: 0 } : null,
+          sample_size_by_source:
+            source_mode === "sauto_only"
+              ? { sauto: prices.length, tipcars: 0 }
+              : null,
           source_mode,
           error: "Not enough observations for this segment",
         });
@@ -361,6 +528,16 @@ export async function GET(req: NextRequest) {
         else if (s === "tipcars") bySource.tipcars += 1;
       }
       sourceBreakdown = bySource;
+
+      {
+        const mv = rows
+          .map((o) => o.mileage_km)
+          .filter((m): m is number => m != null && m > 0);
+        avg_mileage_km =
+          mv.length > 0
+            ? Math.round(mv.reduce((a, b) => a + b, 0) / mv.length)
+            : null;
+      }
 
       const computed = buildStatsFromPrices(prices);
       stats = {
@@ -494,6 +671,8 @@ export async function GET(req: NextRequest) {
       applied_mileage_to:
         segment_mode === "exact" ? (mileageToNum ?? undefined) : undefined,
       mileage_max_km: mileageToNum ?? undefined,
+      expanded_to,
+      avg_mileage_km,
     };
 
     if (process.env.NODE_ENV === "development") {

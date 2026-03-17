@@ -101,74 +101,102 @@ export async function saveObservations(
     }
   }
 
-  const { error } = await supabase
-    .from("market_observations")
-    .upsert(rows, {
-      onConflict: "source,source_listing_id",
-    });
+  const toInsert: Record<string, unknown>[] = [];
+  const toUpdate: {
+    source: string;
+    source_listing_id: string;
+    price_czk: unknown;
+    mileage_km: unknown;
+  }[] = [];
 
-  if (!error) {
-    let inserted = 0;
-    let updated = 0;
-    const insertedIds: string[] = [];
-    const updatedIds: string[] = [];
-    for (const o of valid) {
-      const key = compositeKey(o.source, o.source_listing_id);
-      if (existingSet.has(key)) {
-        updated += 1;
-        if (updatedIds.length < SAMPLE_SIZE) updatedIds.push(o.source_listing_id);
-      } else {
-        inserted += 1;
-        if (insertedIds.length < SAMPLE_SIZE) insertedIds.push(o.source_listing_id);
-      }
+  for (let i = 0; i < valid.length; i++) {
+    const o = valid[i]!;
+    const row = rows[i]!;
+    const key = compositeKey(o.source, o.source_listing_id);
+    if (existingSet.has(key)) {
+      toUpdate.push({
+        source: o.source,
+        source_listing_id: o.source_listing_id,
+        price_czk: row.price_czk,
+        mileage_km: row.mileage_km,
+      });
+    } else {
+      toInsert.push(row);
     }
-    return {
-      saved: rows.length,
-      skipped,
-      inserted,
-      updated,
-      inserted_sample: insertedIds.length > 0 ? insertedIds : undefined,
-      updated_sample: updatedIds.length > 0 ? updatedIds : undefined,
-    };
   }
 
-  // Fallback: pokud DB nemá UNIQUE(source, source_listing_id), upsert selže.
-  if (!error.message.includes("no unique or exclusion constraint")) {
-    throw new Error(`saveObservations: ${error.message}`);
-  }
-
-  let saved = 0;
   let inserted = 0;
   let updated = 0;
-  for (const row of rows) {
-    const source = row.source as string;
-    const sourceListingId = row.source_listing_id as string;
-    const { data: existing } = await supabase
-      .from("market_observations")
-      .select("id")
-      .eq("source", source)
-      .eq("source_listing_id", sourceListingId)
-      .maybeSingle();
+  const insertedIds: string[] = [];
+  const updatedIds: string[] = [];
 
-    if (existing) {
-      const { error: updateErr } = await supabase
-        .from("market_observations")
-        .update(row)
-        .eq("source", source)
-        .eq("source_listing_id", sourceListingId);
-      if (!updateErr) {
-        saved += 1;
-        updated += 1;
-      }
-    } else {
-      const { error: insertErr } = await supabase
-        .from("market_observations")
-        .insert(row);
-      if (!insertErr) {
-        saved += 1;
+  if (toInsert.length > 0) {
+    const { error: insertError } = await supabase
+      .from("market_observations")
+      .insert(toInsert);
+    if (insertError) {
+      throw new Error(`saveObservations insert: ${insertError.message}`);
+    }
+    for (const o of valid) {
+      const key = compositeKey(o.source, o.source_listing_id);
+      if (!existingSet.has(key)) {
         inserted += 1;
+        if (insertedIds.length < SAMPLE_SIZE) {
+          insertedIds.push(o.source_listing_id);
+        }
       }
     }
   }
-  return { saved, skipped, inserted, updated };
+
+  if (toUpdate.length > 0) {
+    const now = new Date().toISOString();
+    for (const u of toUpdate) {
+      const { error: updateError } = await supabase
+        .from("market_observations")
+        .update({
+          price_czk: u.price_czk,
+          mileage_km: u.mileage_km,
+          last_seen_at: now,
+        })
+        .eq("source", u.source)
+        .eq("source_listing_id", u.source_listing_id);
+      if (updateError) {
+        throw new Error(`saveObservations update: ${updateError.message}`);
+      }
+      updated += 1;
+      if (updatedIds.length < SAMPLE_SIZE) {
+        updatedIds.push(u.source_listing_id);
+      }
+    }
+  }
+
+  return {
+    saved: rows.length,
+    skipped,
+    inserted,
+    updated,
+    inserted_sample: insertedIds.length > 0 ? insertedIds : undefined,
+    updated_sample: updatedIds.length > 0 ? updatedIds : undefined,
+  };
+}
+
+export async function deactivateStaleObservations(
+  supabase: SupabaseClient,
+  source: string,
+  staleTresholdHours = 48
+): Promise<{ deactivated: number }> {
+  const threshold = new Date(
+    Date.now() - staleTresholdHours * 60 * 60 * 1000
+  ).toISOString();
+
+  const { data, error } = await supabase
+    .from("market_observations")
+    .update({ active: false })
+    .eq("source", source)
+    .eq("active", true)
+    .lt("last_seen_at", threshold)
+    .select("id");
+
+  if (error) throw new Error(`deactivateStaleObservations: ${error.message}`);
+  return { deactivated: data?.length ?? 0 };
 }

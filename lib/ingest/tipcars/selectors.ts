@@ -10,6 +10,39 @@ export const TIPCARS_BASE_URL = "https://www.tipcars.com";
 /** Used cars listing path (relative to base). */
 export const TIPCARS_LIST_PATH = "/hledam/ojete-vozy";
 
+export const TIPCARS_MODEL_LIST_PATH = (brand: string, model: string): string => {
+  // Speciální případy kde TipCars používá jiné názvy
+  const MODEL_SLUG_MAP: Record<string, string> = {
+    "bmw_3": "bmw-rada-3",
+    "bmw_5": "bmw-rada-5",
+    "bmw_x3": "bmw-x3",
+    "bmw_x5": "bmw-x5",
+    "bmw_1": "bmw-rada-1",
+    "bmw_x1": "bmw-x1",
+    "bmw_2": "bmw-rada-2",
+    "bmw_4": "bmw-rada-4",
+    "bmw_7": "bmw-rada-7",
+    "mercedes-benz_c": "mercedes-benz-trida-c",
+    "mercedes-benz_e": "mercedes-benz-trida-e",
+    "mercedes-benz_a": "mercedes-benz-trida-a",
+    "mercedes-benz_b": "mercedes-benz-trida-b",
+    "mercedes-benz_s": "mercedes-benz-trida-s",
+    "mercedes-benz_glc": "mercedes-benz-glc",
+    "mercedes-benz_gle": "mercedes-benz-gle",
+    "mercedes-benz_gla": "mercedes-benz-gla",
+    "volkswagen_t-roc": "volkswagen-t-roc",
+    "mazda_cx-5": "mazda-cx-5",
+    "mazda_mx-5": "mazda-mx-5",
+    "honda_cr-v": "honda-cr-v",
+    "toyota_c-hr": "toyota-c-hr",
+  };
+  const key = `${brand}_${model}`;
+  if (MODEL_SLUG_MAP[key]) return `/${MODEL_SLUG_MAP[key]}/ojete/`;
+  // Default: brand-model lowercase s pomlčkami
+  const slug = `${brand}-${model}`.toLowerCase().replace(/\s+/g, "-");
+  return `/${slug}/ojete/`;
+};
+
 /**
  * Regex to find listing links. TipCars uses absolute or relative URLs like:
  * https://www.tipcars.com/skoda-rapid/.../skoda-rapid-spaceback-1-0tsi-110ps-ambitio-12730171.html

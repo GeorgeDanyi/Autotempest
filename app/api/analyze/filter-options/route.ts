@@ -19,6 +19,19 @@ function getEnv() {
   return { url, anon };
 }
 
+const MODEL_KEY_BLACKLIST = new Set([
+  "bmw_rada",
+  "bmw_unknown",
+  "land_rover_unknown",
+  "mercedes_benz_unknown",
+  "aston_martin",
+]);
+
+function isCanonicalModelKey(modelKey: string): boolean {
+  const parts = modelKey.split("_").filter(Boolean);
+  return parts.length >= 2 && parts.length <= 4;
+}
+
 function formatModelKeyAsLabel(modelKey: string): string {
   const parts = modelKey.split("_").filter(Boolean);
   if (parts.length <= 1) return modelKey;
@@ -60,9 +73,7 @@ export async function GET(): Promise<NextResponse<FilterOptionsResponse>> {
       .not("brand", "is", null)
       .not("model_key", "is", null)
       .neq("model_key", "")
-      .order("brand", { ascending: true })
-      .order("model_key", { ascending: true })
-      .limit(MAX_ROWS);
+      .limit(100_000);
 
     if (listError) {
       return NextResponse.json(
@@ -83,12 +94,14 @@ export async function GET(): Promise<NextResponse<FilterOptionsResponse>> {
     for (const r of list) {
       const brandRaw = r.brand?.trim() ?? null;
       const modelKey = r.model_key?.trim() ?? null;
-      if (!brandRaw || !modelKey) continue;
-
-      const brandKey = normalizeBrandKey(brandRaw);
-      if (!brandKey) continue;
+      if (!modelKey) continue;
+      if (!isCanonicalModelKey(modelKey)) continue;
+       if (MODEL_KEY_BLACKLIST.has(modelKey)) continue;
       const label = formatModelKeyAsLabel(modelKey);
       modelKeyToLabel[modelKey] = modelKeyToLabel[modelKey] ?? label;
+      if (!brandRaw) continue;
+      const brandKey = normalizeBrandKey(brandRaw);
+      if (!brandKey) continue;
       if (!modelKeyBrandVotes.has(modelKey)) modelKeyBrandVotes.set(modelKey, new Map());
       const votes = modelKeyBrandVotes.get(modelKey)!;
       votes.set(brandKey, (votes.get(brandKey) ?? 0) + 1);

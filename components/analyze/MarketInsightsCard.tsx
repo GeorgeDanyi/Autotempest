@@ -1,69 +1,120 @@
 "use client";
 
-import { Gauge, Activity } from "lucide-react";
-import { formatCurrencyCZK } from "@/lib/ui";
-import { ANALYZE_CARD, ANALYZE_CARD_PADDING, CARD_LABEL, CARD_TITLE, CARD_DESC } from "@/components/analyze/cardStyles";
+import { Users } from "lucide-react";
+import { ANALYZE_CARD, ANALYZE_CARD_PADDING, CARD_LABEL } from "@/components/analyze/cardStyles";
 import type { SharedAnalysisResult } from "@/lib/pricing/types";
 
 type MarketInsightsCardProps = {
   modelLabel: string | null;
   analysisResult: SharedAnalysisResult | null;
+  sampleSize: number | null;
 };
 
-export function MarketInsightsCard({ modelLabel, analysisResult }: MarketInsightsCardProps) {
-  const p25 = analysisResult?.p25_price_czk ?? null;
-  const p75 = analysisResult?.p75_price_czk ?? null;
-  const sampleSize = analysisResult?.sample_size ?? null;
-  const hasData = p25 != null && p75 != null && Number.isFinite(p25) && Number.isFinite(p75);
+export function MarketInsightsCard({
+  modelLabel,
+  analysisResult,
+  sampleSize,
+}: MarketInsightsCardProps) {
+  const effectiveSampleSize =
+    sampleSize ?? analysisResult?.sample_size ?? null;
+
+  let value: string;
+  let description: string;
+  let badgeClass: string;
+
+  if (effectiveSampleSize != null && effectiveSampleSize >= 50) {
+    value = "Aktivní trh";
+    description = "Dostatek nabídek pro spolehlivou analýzu.";
+    badgeClass = "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  } else if (effectiveSampleSize != null && effectiveSampleSize >= 20) {
+    value = "Běžný trh";
+    description = "Průměrná nabídka pro tento segment.";
+    badgeClass = "bg-sky-50 text-sky-700 ring-sky-200";
+  } else if (effectiveSampleSize != null && effectiveSampleSize >= 5) {
+    value = "Řídký trh";
+    description = "Méně nabídek — ceny mohou kolísat.";
+    badgeClass = "bg-amber-50 text-amber-700 ring-amber-200";
+  } else {
+    value = "Velmi málo dat";
+    description = "Nedostatek dat pro spolehlivý odhad.";
+    badgeClass = "bg-red-50 text-red-700 ring-red-200";
+  }
+
+  const badgeLabel =
+    effectiveSampleSize != null ? `${effectiveSampleSize} inz.` : "–";
 
   return (
-    <div
-      className={`${ANALYZE_CARD} ${ANALYZE_CARD_PADDING}`}
-      aria-label="Tržní insight"
-    >
-      <p className={CARD_LABEL}>Tržní insight</p>
-      <h3 className={`mt-2 ${CARD_TITLE}`}>
-        {modelLabel ? `${modelLabel} na trhu` : "Segment na trhu"}
-      </h3>
-      <ul className={`mt-5 space-y-2.5 ${CARD_DESC}`}>
-        <li className="flex gap-2.5">
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-          <span>
-            {hasData ? (
-              <>Většina nabídek <span className="font-semibold text-slate-800">{formatCurrencyCZK(p25)}–{formatCurrencyCZK(p75)}</span></>
-            ) : (
-              "Vyberte model pro zobrazení rozptylu cen."
-            )}
-          </span>
-        </li>
-        <li className="flex gap-2.5">
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-          <span>Trh likvidní, nabídka roste.</span>
-        </li>
-        <li className="flex gap-2.5">
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
-          <span>Vyjednávací prostor mírně větší.</span>
-        </li>
-      </ul>
+    <div className={`${ANALYZE_CARD} ${ANALYZE_CARD_PADDING}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={CARD_LABEL}>Likvidita trhu</p>
+          <p className="mt-1 text-xl font-bold tracking-tight text-slate-900">
+            {value}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${badgeClass}`}
+        >
+          {badgeLabel}
+        </span>
+      </div>
 
-      <dl className="mt-6 grid grid-cols-3 gap-4">
-        <div className="space-y-1">
-          <dt className={`flex items-center gap-1.5 ${CARD_LABEL}`}><Gauge className="h-3 w-3" /> Rozptyl</dt>
-          <dd className="font-mono text-xs font-semibold tabular-nums text-slate-800">
-            {hasData ? `${formatCurrencyCZK(p25)}–${formatCurrencyCZK(p75)}` : "–"}
-          </dd>
+      {/* Progress bar */}
+      <div className="mt-4">
+        <div className="h-1.5 w-full rounded-full bg-slate-100">
+          <div
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              effectiveSampleSize != null && effectiveSampleSize >= 50
+                ? "bg-emerald-400"
+                : effectiveSampleSize != null && effectiveSampleSize >= 20
+                  ? "bg-sky-400"
+                  : effectiveSampleSize != null && effectiveSampleSize >= 5
+                    ? "bg-amber-400"
+                    : "bg-red-400"
+            }`}
+            style={{
+              width: `${Math.min(
+                100,
+                ((effectiveSampleSize ?? 0) / 100) * 100,
+              )}%`,
+            }}
+          />
         </div>
-        <div className="space-y-1">
-          <dt className={`flex items-center gap-1.5 ${CARD_LABEL}`}><Activity className="h-3 w-3" /> Vzorek</dt>
-          <dd className="font-mono text-xs font-semibold tabular-nums text-slate-800">
-            {sampleSize != null ? `${sampleSize.toLocaleString("cs-CZ")} inz.` : "–"}
-          </dd>
+      </div>
+
+      {/* Stats grid */}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+            Inzerátů
+          </p>
+          <p className="mt-0.5 text-base font-bold text-slate-800">
+            {effectiveSampleSize?.toLocaleString("cs-CZ") ?? "–"}
+          </p>
         </div>
-        <div className="space-y-1">
-          <dt className={CARD_LABEL}>Volatilita</dt>
-          <dd className="text-xs font-semibold text-slate-800">Nízká</dd>
+        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+            Volatilita
+          </p>
+          <p
+            className={`mt-0.5 text-base font-bold ${
+              effectiveSampleSize != null && effectiveSampleSize >= 50
+                ? "text-emerald-600"
+                : effectiveSampleSize != null && effectiveSampleSize >= 20
+                  ? "text-sky-600"
+                  : "text-amber-600"
+            }`}
+          >
+            {effectiveSampleSize != null && effectiveSampleSize >= 50
+              ? "Nízká"
+              : effectiveSampleSize != null && effectiveSampleSize >= 20
+                ? "Střední"
+                : "Vysoká"}
+          </p>
         </div>
-      </dl>
+      </div>
+
+      <p className="mt-3 text-[11px] text-slate-500">{description}</p>
     </div>
   );
 }

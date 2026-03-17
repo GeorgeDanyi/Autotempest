@@ -1,58 +1,51 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-
-import { Container } from "@/components/layout/primitives"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function SiteHeader() {
-  return (
-    <header className="sticky top-0 z-40 border-b border-white/40 bg-white/70 backdrop-blur-md supports-[backdrop-filter]:bg-white/60">
-      <Container className="flex h-14 items-center justify-between gap-4 sm:h-16">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight"
-        >
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-500 text-[11px] font-bold text-white shadow-[0_10px_30px_rgba(79,70,229,0.45)]">
-            AT
-          </span>
-          <span className="flex items-baseline gap-1 text-base md:text-lg">
-            <span className="font-semibold text-neutral-900">
-              AutoTempest
-            </span>
-            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-neutral-500">
-              CZ
-            </span>
-          </span>
-        </Link>
+  const pathname = usePathname();
+  const isHome = pathname === "/";
 
-        <nav className="hidden items-center gap-1 rounded-full bg-neutral-50/80 p-1 text-[11px] font-medium text-neutral-500 shadow-[0_12px_35px_rgba(15,23,42,0.06)] sm:flex md:text-xs">
-          <a
-            href="#hero"
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-neutral-700 transition-colors hover:bg-white hover:text-neutral-900"
-          >
-            Přehled
-          </a>
-          <a
-            href="#dashboard"
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900"
-          >
-            Dashboard
-          </a>
-          <a
-            href="#deals"
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900"
-          >
-            Nabídky
-          </a>
-          <a
-            href="#method"
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900"
-          >
-            Metodika
-          </a>
-        </nav>
-      </Container>
+  return (
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 ${
+        isHome ? "bg-transparent" : "bg-white/90 border-b border-slate-200/60 backdrop-blur-md"
+      }`}
+    >
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-8">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-[11px] font-bold text-white">
+              AT
+            </div>
+            <span
+              className={`text-sm font-semibold tracking-tight ${
+                isHome ? "text-slate-900" : "text-slate-900"
+              }`}
+            >
+              AutoTempest <span className="text-slate-400 font-normal">cz</span>
+            </span>
+          </Link>
+          <nav className="hidden md:flex items-center gap-1">
+            {[
+              { href: "/", label: "Přehled" },
+              { href: "/analyze", label: "Analyzovat" },
+              { href: "/dashboard", label: "Dashboard" },
+              { href: "/methodology", label: "Metodika" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-white/40 hover:text-slate-900 transition-colors"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
     </header>
-  )
+  );
 }
 

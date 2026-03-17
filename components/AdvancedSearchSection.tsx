@@ -328,6 +328,7 @@ export function AdvancedSearchSection() {
   const [manualPrice, setManualPrice] = useState("");
   const [filterOptions, setFilterOptions] = useState<FilterOptionsResponse | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -914,143 +915,175 @@ export function AdvancedSearchSection() {
               {rangeError}
             </p>
           )}
-          {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <ComboBox
-              label="Značka"
-              placeholder={filterOptions ? "Značka" : "Načítám…"}
-              value={filters.brand}
-              onChange={(v) => {
-                const modelsForNewBrand =
-                  v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
-                const currentModelInNewBrand = filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
-                setFilters((prev) => ({
-                  ...prev,
-                  brand: v,
-                  model: currentModelInNewBrand ? prev.model : null,
-                }));
-                if (v) setModelDropdownOpen(true);
-              }}
-              options={brandOptions}
-            />
-            <ComboBox
-              label="Model"
-              placeholder={!filters.brand ? "Nejprve zvolte značku" : modelOptions.length ? "Model" : "Načítám…"}
-              value={filters.model}
-              onChange={(v) => setFilter("model", v)}
-              options={modelOptions}
-              disabled={!filters.brand}
-              open={modelDropdownOpen}
-              onOpenChange={setModelDropdownOpen}
-            />
-            <Select
-              label="Rok od"
-              placeholder="Rok od"
-              value={filters.yearFrom || "Libovolně"}
-              onChange={(v) =>
-                setFilter("yearFrom", v === "Libovolně" ? "" : v ?? "")
-              }
-              options={YEAR_OPTIONS}
-            />
-            <Select
-              label="Rok do"
-              placeholder="Rok do"
-              value={filters.yearTo || "Libovolně"}
-              onChange={(v) =>
-                setFilter("yearTo", v === "Libovolně" ? "" : v ?? "")
-              }
-              options={YEAR_OPTIONS}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            className="mt-3 text-[12px] text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5"
+          >
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              {showFilters ? (
+                <path d="M5 15l7-7 7 7" />
+              ) : (
+                <path d="M19 9l-7 7-7-7" />
+              )}
+            </svg>
+            {showFilters ? "Skrýt filtry" : "+ Pokročilé filtry"}
+          </button>
 
-          {/* Row 2: Nájezd od | Nájezd do | Palivo | Převodovka */}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Select
-              label="Nájezd od"
-              placeholder="Libovolně"
-              value={
-                filters.mileageFrom
-                  ? formatKm(filters.mileageFrom)
-                  : "Libovolně"
-              }
-              onChange={(label) => {
-                const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
-                setFilter("mileageFrom", o ? o.value : "");
-              }}
-              options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
-            />
-            <Select
-              label="Nájezd do"
-              placeholder="Libovolně"
-              value={
-                filters.mileageTo ? formatKm(filters.mileageTo) : "Libovolně"
-              }
-              onChange={(label) => {
-                const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
-                setFilter("mileageTo", o ? o.value : "");
-              }}
-              options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
-            />
-            <MultiSelect
-              label="Palivo"
-              placeholder="Palivo"
-              value={filters.fuels}
-              onChange={(v) => setFilter("fuels", v)}
-              options={[...FUEL_OPTIONS]}
-            />
-            <Select
-              label="Převodovka"
-              placeholder="Převodovka"
-              value={filters.gearbox}
-              onChange={(v) => setFilter("gearbox", v)}
-              options={[...GEARBOX_OPTIONS]}
-            />
-          </div>
+          {showFilters && (
+            <div className="mt-4">
+              {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <ComboBox
+                  label="Značka"
+                  placeholder={filterOptions ? "Značka" : "Načítám…"}
+                  value={filters.brand}
+                  onChange={(v) => {
+                    const modelsForNewBrand =
+                      v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
+                    const currentModelInNewBrand =
+                      filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
+                    setFilters((prev) => ({
+                      ...prev,
+                      brand: v,
+                      model: currentModelInNewBrand ? prev.model : null,
+                    }));
+                    if (v) setModelDropdownOpen(true);
+                  }}
+                  options={brandOptions}
+                />
+                <ComboBox
+                  label="Model"
+                  placeholder={
+                    !filters.brand
+                      ? "Nejprve zvolte značku"
+                      : modelOptions.length
+                      ? "Model"
+                      : "Načítám…"
+                  }
+                  value={filters.model}
+                  onChange={(v) => setFilter("model", v)}
+                  options={modelOptions}
+                  disabled={!filters.brand}
+                  open={modelDropdownOpen}
+                  onOpenChange={setModelDropdownOpen}
+                />
+                <Select
+                  label="Rok od"
+                  placeholder="Rok od"
+                  value={filters.yearFrom || "Libovolně"}
+                  onChange={(v) =>
+                    setFilter("yearFrom", v === "Libovolně" ? "" : v ?? "")
+                  }
+                  options={YEAR_OPTIONS}
+                />
+                <Select
+                  label="Rok do"
+                  placeholder="Rok do"
+                  value={filters.yearTo || "Libovolně"}
+                  onChange={(v) =>
+                    setFilter("yearTo", v === "Libovolně" ? "" : v ?? "")
+                  }
+                  options={YEAR_OPTIONS}
+                />
+              </div>
 
-          {/* Row 3: Motor | Výkon | Karoserie | Pohon */}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <ComboBox
-              label="Motor"
-              placeholder="Motor"
-              value={filters.engine}
-              onChange={(v) => setFilter("engine", v)}
-              options={[...ENGINE_OPTIONS]}
-            />
-            <Select
-              label="Výkon"
-              placeholder="Výkon"
-              value={filters.power ?? "Libovolně"}
-              onChange={(v) =>
-                setFilter("power", v === "Libovolně" ? null : v ?? null)
-              }
-              options={[...POWER_OPTIONS]}
-            />
-            <Select
-              label="Karoserie"
-              placeholder="Karoserie"
-              value={filters.bodyType}
-              onChange={(v) => setFilter("bodyType", v)}
-              options={[...BODY_TYPE_OPTIONS]}
-            />
-            <Select
-              label="Pohon"
-              placeholder="Pohon"
-              value={filters.drivetrain}
-              onChange={(v) => setFilter("drivetrain", v)}
-              options={[...DRIVETRAIN_OPTIONS]}
-            />
-          </div>
+              {/* Row 2: Nájezd od | Nájezd do | Palivo | Převodovka */}
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  label="Nájezd od"
+                  placeholder="Libovolně"
+                  value={
+                    filters.mileageFrom
+                      ? formatKm(filters.mileageFrom)
+                      : "Libovolně"
+                  }
+                  onChange={(label) => {
+                    const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
+                    setFilter("mileageFrom", o ? o.value : "");
+                  }}
+                  options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
+                />
+                <Select
+                  label="Nájezd do"
+                  placeholder="Libovolně"
+                  value={
+                    filters.mileageTo ? formatKm(filters.mileageTo) : "Libovolně"
+                  }
+                  onChange={(label) => {
+                    const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
+                    setFilter("mileageTo", o ? o.value : "");
+                  }}
+                  options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
+                />
+                <MultiSelect
+                  label="Palivo"
+                  placeholder="Palivo"
+                  value={filters.fuels}
+                  onChange={(v) => setFilter("fuels", v)}
+                  options={[...FUEL_OPTIONS]}
+                />
+                <Select
+                  label="Převodovka"
+                  placeholder="Převodovka"
+                  value={filters.gearbox}
+                  onChange={(v) => setFilter("gearbox", v)}
+                  options={[...GEARBOX_OPTIONS]}
+                />
+              </div>
 
-          {/* Row 4: Výbava (full width) */}
-          <div className="mt-4 lg:col-span-4">
-            <MultiComboBox
-              label="Výbava"
-              placeholder="Výbava"
-              value={filters.features}
-              onChange={(v) => setFilter("features", v)}
-              options={[...FEATURE_OPTIONS]}
-            />
-          </div>
+              {/* Row 3: Motor | Výkon | Karoserie | Pohon */}
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <ComboBox
+                  label="Motor"
+                  placeholder="Motor"
+                  value={filters.engine}
+                  onChange={(v) => setFilter("engine", v)}
+                  options={[...ENGINE_OPTIONS]}
+                />
+                <Select
+                  label="Výkon"
+                  placeholder="Výkon"
+                  value={filters.power ?? "Libovolně"}
+                  onChange={(v) =>
+                    setFilter("power", v === "Libovolně" ? null : v ?? null)
+                  }
+                  options={[...POWER_OPTIONS]}
+                />
+                <Select
+                  label="Karoserie"
+                  placeholder="Karoserie"
+                  value={filters.bodyType}
+                  onChange={(v) => setFilter("bodyType", v)}
+                  options={[...BODY_TYPE_OPTIONS]}
+                />
+                <Select
+                  label="Pohon"
+                  placeholder="Pohon"
+                  value={filters.drivetrain}
+                  onChange={(v) => setFilter("drivetrain", v)}
+                  options={[...DRIVETRAIN_OPTIONS]}
+                />
+              </div>
+
+              {/* Row 4: Výbava (full width) */}
+              <div className="mt-4 lg:col-span-4">
+                <MultiComboBox
+                  label="Výbava"
+                  placeholder="Výbava"
+                  value={filters.features}
+                  onChange={(v) => setFilter("features", v)}
+                  options={[...FEATURE_OPTIONS]}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </GlassCard>
 

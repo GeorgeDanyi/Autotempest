@@ -81,6 +81,23 @@ function mileageLabel(value: string): string {
   return `${parsed.toLocaleString("cs-CZ")} km`;
 }
 
+const FUEL_LABEL_TO_API: Record<string, string> = {
+  Benzín: "petrol",
+  Nafta: "diesel",
+  Hybrid: "hybrid",
+  Elektro: "ev",
+  "LPG/CNG": "lpg",
+};
+const FUEL_API_TO_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(FUEL_LABEL_TO_API).map(([k, v]) => [v, k]),
+);
+
+const TRANSMISSION_LABEL_TO_API: Record<string, string> = {
+  Manuál: "manual",
+  Automat: "automatic",
+  DSG: "dsg",
+};
+
 export function AnalyzeFiltersCard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -142,7 +159,12 @@ export function AnalyzeFiltersCard() {
         yearTo: parsed.yearTo ?? prev.yearTo,
         mileageFrom: parsed.mileageFrom ?? params.mileageFrom ?? prev.mileageFrom,
         mileageTo: parsed.mileageTo ?? prev.mileageTo,
-        fuels: parsed.fuels ? parsed.fuels.split(",").filter(Boolean) : prev.fuels,
+        fuels: parsed.fuels
+          ? parsed.fuels
+              .split(",")
+              .filter(Boolean)
+              .map((f) => FUEL_API_TO_LABEL[f] ?? f)
+          : prev.fuels,
         transmission: parsed.transmission ?? prev.transmission,
         engine: parsed.engine ?? prev.engine,
         bodyType: params.bodyType ?? prev.bodyType,
@@ -269,8 +291,15 @@ export function AnalyzeFiltersCard() {
         yearTo: filters.yearTo || null,
         mileageFrom: filters.mileageFrom || null,
         mileageTo: filters.mileageTo || null,
-        fuels: filters.fuels.length ? filters.fuels.join(",") : null,
-        transmission: filters.transmission,
+        fuels: filters.fuels.length
+          ? filters.fuels
+              .map((f) => FUEL_LABEL_TO_API[f] ?? f)
+              .join(",")
+          : null,
+        transmission: filters.transmission
+          ? TRANSMISSION_LABEL_TO_API[filters.transmission] ??
+            filters.transmission
+          : null,
         engine: filters.engine,
       },
       searchParams,
@@ -344,7 +373,7 @@ export function AnalyzeFiltersCard() {
         </p>
       )}
       <div className="mt-5">
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
           <ComboBox
             label="Značka"
             placeholder="Značka"
@@ -362,11 +391,20 @@ export function AnalyzeFiltersCard() {
             displayLabel={resolvedFilters.modelLabel}
           />
           <Select
-            label="Rok"
+            label="Rok od"
             placeholder="Libovolně"
             value={filters.yearFrom || "Libovolně"}
             onChange={(value) =>
               setFilter("yearFrom", value === "Libovolně" ? "" : value ?? "")
+            }
+            options={YEAR_OPTIONS}
+          />
+          <Select
+            label="Rok do"
+            placeholder="Libovolně"
+            value={filters.yearTo || "Libovolně"}
+            onChange={(value) =>
+              setFilter("yearTo", value === "Libovolně" ? "" : value ?? "")
             }
             options={YEAR_OPTIONS}
           />

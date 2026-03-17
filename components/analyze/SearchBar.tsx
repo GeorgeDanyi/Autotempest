@@ -41,7 +41,7 @@ export function SearchBar({ placeholder }: SearchBarProps) {
   };
 
   return (
-    <div className="sticky top-16 z-30 mb-4 border-b border-slate-100 bg-[radial-gradient(circle_at_top,_rgba(226,236,255,0.9)_0,_rgba(249,250,251,0.96)_42%,_rgba(255,255,255,0.98)_100%)]/90 pb-4 backdrop-blur-md">
+    <div className="sticky top-16 z-30 mb-4 border-b border-slate-100 bg-white pb-4">
       <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:px-5 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">

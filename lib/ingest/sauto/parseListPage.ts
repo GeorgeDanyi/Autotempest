@@ -81,7 +81,7 @@ function findPrice(ctx: string): number | null {
 
   for (const c of candidates) {
     const n = parsePriceCzk(c);
-    if (n && n >= 10000) return n;
+    if (n && n >= 20000 && n <= 5_000_000) return n;
   }
   return null;
 }
@@ -171,6 +171,12 @@ export function parseSautoList(html: string): SautoParsedListing[] {
       continue;
     }
   }
-
-  return out;
+  console.log("[sauto][parse]", "html length:", html.length, "matches:", out.length);
+  const seen = new Set<string>();
+  return out.filter((item) => {
+    if (!item.source_listing_id || item.source_listing_id.length < 5) return false;
+    if (seen.has(item.source_listing_id)) return false;
+    seen.add(item.source_listing_id);
+    return true;
+  });
 }

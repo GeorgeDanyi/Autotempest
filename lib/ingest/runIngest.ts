@@ -16,6 +16,7 @@ import { getSupabaseAdmin } from "../supabase/admin";
 import { rebuildPriceIndex } from "../pricing/rebuildPriceIndex";
 import { runSautoIngest } from "./sources/sauto";
 import { runTipcarsIngest } from "./sources/tipcars";
+import { runSautoBulkIngestModels } from "./ingestSautoBulk";
 import {
   getIngestQualitySummaryForModelKey,
   logModelKeyQualitySummary,
@@ -32,6 +33,8 @@ export type IngestOptions = {
   pages?: number;
 };
 
+type IngestMode = "brands" | "models" | "deep";
+
 function parseArg(name: string, defaultValue: string | null): string | null {
   const i = process.argv.findIndex((a) => a === `--${name}` || a.startsWith(`--${name}=`));
   if (i === -1) return defaultValue;
@@ -45,6 +48,12 @@ function parsePages(defaultPages: number): number {
   if (p == null) return defaultPages;
   const n = parseInt(p, 10);
   return Number.isFinite(n) && n > 0 ? Math.min(n, 200) : defaultPages;
+}
+
+function parseMode(): IngestMode {
+  const raw = parseArg("mode", null);
+  if (raw === "brands" || raw === "models" || raw === "deep") return raw;
+  return "models";
 }
 
 function parseSourceFilter(): string | null {
@@ -69,8 +78,16 @@ async function main() {
   const options: IngestOptions = {
     brand: parseArg("brand", null),
     model: parseArg("model", null),
-    pages: parsePages(3),
+    pages: parsePages(10),
   };
+
+  let mode: IngestMode = parseMode();
+  const hasDeepBrand = options.brand != null && options.brand !== "";
+  if (mode === "models" && hasDeepBrand) {
+    // Backwards-compat: pokud je zadán brand (a případně model) bez --mode,
+    // považujeme to za deep režim.
+    mode = "deep";
+  }
 
   const deepMode = options.brand != null && options.brand !== "";
   if (deepMode) {
@@ -89,18 +106,87 @@ async function main() {
   let totalSaved = 0;
   for (const { key, run } of toRun) {
     try {
-      const result = await run(supabase, options);
-      totalSaved += result.saved;
-      if (result.errors.length > 0) {
-        console.warn(`[ingest] ${key} warnings:`, result.errors);
+      if (key === "sauto") {
+        if (mode === "deep") {
+          const result = await run(supabase, options);
+          totalSaved += result.saved;
+          if (result.errors.length > 0) {
+            console.warn(`[ingest] ${key} warnings:`, result.errors);
+          }
+          const inserted = "inserted" in result ? result.inserted : 0;
+          const updated = "updated" in result ? result.updated : 0;
+          if ("funnel" in result && result.funnel) {
+            const f = result.funnel as Record<string, unknown>;
+            console.log(
+              `[ingest] ${key} funnel:`,
+              JSON.stringify(f),
+            );
+          }
+          console.log(
+            `[ingest] ${key} saved=${result.saved} new=${inserted} updated=${updated}`,
+          );
+        } else if (mode === "models") {
+          const pages = options.pages ?? 10;
+          console.log(
+            "[ingest] sauto models mode – crawl BRANDS+BRAND_MODELS",
+            { pages },
+          );
+          const result = await runSautoBulkIngestModels({ pages });
+          totalSaved += result.inserted;
+          console.log(
+            "[ingest][sauto][models] brandsProcessed=%d modelsProcessed=%d pagesFetched=%d parsedListings=%d inserted=%d skippedExisting=%d errors=%d",
+            result.brandsProcessed,
+            result.modelsProcessed,
+            result.pagesFetched,
+            result.parsedListings,
+            result.inserted,
+            result.skippedExisting,
+            result.errors,
+          );
+        } else {
+          // brands mode – plošný crawl po značkách (bez deep kontextu)
+          const shallowOptions: IngestOptions = {
+            brand: null,
+            model: null,
+            pages: options.pages,
+          };
+          const result = await run(supabase, shallowOptions);
+          totalSaved += result.saved;
+          if (result.errors.length > 0) {
+            console.warn(`[ingest] ${key} warnings:`, result.errors);
+          }
+          const inserted = "inserted" in result ? result.inserted : 0;
+          const updated = "updated" in result ? result.updated : 0;
+          if ("funnel" in result && result.funnel) {
+            const f = result.funnel as Record<string, unknown>;
+            console.log(
+              `[ingest] ${key} funnel:`,
+              JSON.stringify(f),
+            );
+          }
+          console.log(
+            `[igest] ${key} saved=${result.saved} new=${inserted} updated=${updated}`,
+          );
+        }
+      } else {
+        const result = await run(supabase, options);
+        totalSaved += result.saved;
+        if (result.errors.length > 0) {
+          console.warn(`[ingest] ${key} warnings:`, result.errors);
+        }
+        const inserted = "inserted" in result ? result.inserted : 0;
+        const updated = "updated" in result ? result.updated : 0;
+        if ("funnel" in result && result.funnel) {
+          const f = result.funnel as Record<string, unknown>;
+          console.log(
+            `[ingest] ${key} funnel:`,
+            JSON.stringify(f),
+          );
+        }
+        console.log(
+          `[ingest] ${key} saved=${result.saved} new=${inserted} updated=${updated}`,
+        );
       }
-      const inserted = "inserted" in result ? result.inserted : 0;
-      const updated = "updated" in result ? result.updated : 0;
-      if ("funnel" in result && result.funnel) {
-        const f = result.funnel as Record<string, unknown>;
-        console.log(`[ingest] ${key} funnel:`, JSON.stringify(f));
-      }
-      console.log(`[ingest] ${key} saved=${result.saved} new=${inserted} updated=${updated}`);
     } catch (e) {
       console.error(`[ingest] ${key} failed:`, e);
     }

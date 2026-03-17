@@ -4,7 +4,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchTipcarsListings } from "@/lib/ingest/tipcars/fetchTipcarsListings";
+import {
+  fetchTipcarsListings,
+  fetchTipcarsModelListings,
+} from "@/lib/ingest/tipcars/fetchTipcarsListings";
 import { parseTipcarsListPages } from "@/lib/ingest/tipcars/parseTipcarsListing";
 import { enrichTipcarsListings } from "@/lib/ingest/tipcars/enrichTipcarsListings";
 import { mapTipcarsToObservation } from "@/lib/ingest/tipcars/mapTipcarsToObservation";
@@ -64,9 +67,39 @@ export async function runTipcarsIngest(
   }
 
   // Fetch layer (list pages)
-  const { htmlPerPage, errors: fetchErrors } = await fetchTipcarsListings({
-    pages: pagesRequested,
-  });
+  let fetchResult:
+    | {
+        htmlPerPage: string[];
+        urls: string[];
+        errors: string[];
+      };
+
+  if (isDeep && options?.brand && options?.model) {
+    // Brand+model specifická URL: /skoda-octavia/ojete/
+    fetchResult = await fetchTipcarsModelListings({
+      brand: options.brand,
+      model: options.model,
+      pages: pagesRequested,
+    });
+  } else {
+    // Globální nebo brand-only fallback
+    const initial = await fetchTipcarsListings({
+      pages: pagesRequested,
+      brand: options?.brand ?? undefined,
+    });
+    if (
+      isDeep &&
+      initial.htmlPerPage.length > 0 &&
+      initial.htmlPerPage.every((h) => h.length < 1000)
+    ) {
+      console.log("[ingest][tipcars] brand URL failed, fallback to global");
+      fetchResult = await fetchTipcarsListings({ pages: pagesRequested });
+    } else {
+      fetchResult = initial;
+    }
+  }
+
+  const { htmlPerPage, errors: fetchErrors } = fetchResult;
   errors.push(...fetchErrors);
 
   if (htmlPerPage.length === 0) {
@@ -98,7 +131,7 @@ export async function runTipcarsIngest(
   );
 
   // Detail enrichment: fetch each detail page, parse, merge (detail overrides list)
-  const { enriched, stats } = await enrichTipcarsListings(filtered);
+  const { enriched, stats } = await enrichTipcarsListings(filtered, 5);
   console.log(`[ingest][tipcars] detail_fetch_attempted=${stats.detail_fetch_attempted}`);
   console.log(`[ingest][tipcars] detail_fetch_succeeded=${stats.detail_fetch_succeeded}`);
   console.log(`[ingest][tipcars] detail_fetch_failed=${stats.detail_fetch_failed}`);

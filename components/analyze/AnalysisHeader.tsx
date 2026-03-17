@@ -32,7 +32,11 @@ export function AnalysisHeader() {
 
     const modelLabel = modelLabelFromParam(model);
     const yearLabel =
-      yearFrom && yearTo ? `${yearFrom}–${yearTo}` : yearFrom ?? yearTo ?? null;
+      yearFrom && yearTo
+        ? yearFrom === yearTo
+          ? yearFrom
+          : `${yearFrom}–${yearTo}`
+        : yearFrom ?? yearTo ?? null;
 
     const parts: string[] = [];
     if (brand) parts.push(brand);
