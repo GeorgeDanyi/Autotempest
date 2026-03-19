@@ -5,7 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { ArrowRight, Filter as FilterIcon, Loader2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { GlassCard } from "@/components/price-trends/GlassCard";
 import { GradientButton } from "@/components/price-trends/GradientButton";
 import {
   ComboBox,
@@ -687,76 +686,47 @@ export function AdvancedSearchSection() {
 
   return (
     <div className="space-y-4">
-      {/* Card 1: Quick search */}
-      <GlassCard noHoverEffect className="px-4 py-4 sm:px-6 sm:py-5">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-slate-400">
-              Rychlé vyhledávání
-            </p>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Input
+              value={filters.query}
+              onChange={(e) => setFilter("query", e.target.value)}
+              placeholder="Popiš auto (např. Škoda Octavia 2019 2.0 TDI DSG, 150 000 km)"
+              className="h-[60px] rounded-[18px] border border-slate-300 bg-white pl-10 pr-4 text-sm placeholder:text-[#94A3B8] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_40px_rgba(15,23,42,0.10)] focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:border-transparent focus-visible:ring-offset-0"
+            />
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <FilterIcon className="h-4 w-4" />
+            </span>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Input
-                value={filters.query}
-                onChange={(e) => setFilter("query", e.target.value)}
-                placeholder="Popiš auto (např. Škoda Octavia 2019 2.0 TDI DSG, 150 000 km)"
-                className="h-[60px] rounded-[18px] border-[rgba(148,163,184,0.45)] bg-white/85 pl-10 pr-4 text-sm placeholder:text-[#94A3B8] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_40px_rgba(15,23,42,0.10)] focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:border-transparent focus-visible:ring-offset-0"
-              />
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                <FilterIcon className="h-4 w-4" />
-              </span>
-            </div>
-            <div className="flex justify-end">
-              <GradientButton
-                variant="primary"
-                className="w-full sm:w-auto"
-                rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
-                onClick={handleQuickAnalyze}
-              >
-                Analyzovat
-              </GradientButton>
-            </div>
+          <div className="flex justify-end">
+            <GradientButton
+              variant="primary"
+              className="w-full sm:w-auto"
+              rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+              onClick={handleQuickAnalyze}
+            >
+              Analyzovat
+            </GradientButton>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Z popisu automaticky doplníme značku, model, rok a filtry v
-            rozšířeném vyhledávání a zároveň ověříme cenovku vůči trhu.
-          </p>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Card 2: Advanced filters */}
-      <GlassCard noHoverEffect className="px-4 py-4 sm:px-6 sm:py-5">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="space-y-1">
-              <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-slate-400">
-                Upřesnit filtry
-              </p>
-              <p className="text-xs text-slate-500">
-                Kombinuj přirozené zadání s detailními parametry, podobně jako
-                na AutoTempest.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <button
-                type="button"
-                onClick={handleReset}
-                className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-slate-600 hover:bg-slate-50"
-              >
-                Resetovat
-              </button>
-              <GradientButton
-                variant="primary"
-                className="px-4 py-1.5 text-xs"
-                rightIcon={<ArrowRight className="h-3 w-3" />}
-                onClick={handleApply}
-              >
-                Použít filtry
-              </GradientButton>
-            </div>
-          </div>
+      <div className="mt-4 flex flex-col items-center gap-3">
+        <p className="text-center text-[12px] text-slate-500">
+          Automaticky doplníme značku, model, rok a filtry.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowFilters(!showFilters)}
+          className="rounded-full border border-slate-300 bg-transparent px-5 py-2 text-[13px] text-slate-700 transition-colors hover:bg-white/60"
+        >
+          Zadat auto ručně přes filtry ↓
+        </button>
+      </div>
 
+      {showFilters && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
           {/* Selected summary pills — zobrazují label (značka/model z API) */}
           <div className="mt-1 min-h-[28px] flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
             {filters.brand && (
@@ -915,84 +885,61 @@ export function AdvancedSearchSection() {
               {rangeError}
             </p>
           )}
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className="mt-3 text-[12px] text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5"
-          >
-            <svg
-              className="h-3 w-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              {showFilters ? (
-                <path d="M5 15l7-7 7 7" />
-              ) : (
-                <path d="M19 9l-7 7-7-7" />
-              )}
-            </svg>
-            {showFilters ? "Skrýt filtry" : "+ Pokročilé filtry"}
-          </button>
-
-          {showFilters && (
-            <div className="mt-4">
-              {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ComboBox
-                  label="Značka"
-                  placeholder={filterOptions ? "Značka" : "Načítám…"}
-                  value={filters.brand}
-                  onChange={(v) => {
-                    const modelsForNewBrand =
-                      v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
-                    const currentModelInNewBrand =
-                      filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
-                    setFilters((prev) => ({
-                      ...prev,
-                      brand: v,
-                      model: currentModelInNewBrand ? prev.model : null,
-                    }));
-                    if (v) setModelDropdownOpen(true);
-                  }}
-                  options={brandOptions}
-                />
-                <ComboBox
-                  label="Model"
-                  placeholder={
-                    !filters.brand
-                      ? "Nejprve zvolte značku"
-                      : modelOptions.length
-                      ? "Model"
-                      : "Načítám…"
-                  }
-                  value={filters.model}
-                  onChange={(v) => setFilter("model", v)}
-                  options={modelOptions}
-                  disabled={!filters.brand}
-                  open={modelDropdownOpen}
-                  onOpenChange={setModelDropdownOpen}
-                />
-                <Select
-                  label="Rok od"
-                  placeholder="Rok od"
-                  value={filters.yearFrom || "Libovolně"}
-                  onChange={(v) =>
-                    setFilter("yearFrom", v === "Libovolně" ? "" : v ?? "")
-                  }
-                  options={YEAR_OPTIONS}
-                />
-                <Select
-                  label="Rok do"
-                  placeholder="Rok do"
-                  value={filters.yearTo || "Libovolně"}
-                  onChange={(v) =>
-                    setFilter("yearTo", v === "Libovolně" ? "" : v ?? "")
-                  }
-                  options={YEAR_OPTIONS}
-                />
-              </div>
+          {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <ComboBox
+              label="Značka"
+              placeholder={filterOptions ? "Značka" : "Načítám…"}
+              value={filters.brand}
+              onChange={(v) => {
+                const modelsForNewBrand =
+                  v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
+                const currentModelInNewBrand =
+                  filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
+                setFilters((prev) => ({
+                  ...prev,
+                  brand: v,
+                  model: currentModelInNewBrand ? prev.model : null,
+                }));
+                if (v) setModelDropdownOpen(true);
+              }}
+              options={brandOptions}
+            />
+            <ComboBox
+              label="Model"
+              placeholder={
+                !filters.brand
+                  ? "Nejprve zvolte značku"
+                  : modelOptions.length
+                  ? "Model"
+                  : "Načítám…"
+              }
+              value={filters.model}
+              onChange={(v) => setFilter("model", v)}
+              options={modelOptions}
+              disabled={!filters.brand}
+              open={modelDropdownOpen}
+              onOpenChange={setModelDropdownOpen}
+            />
+            <Select
+              label="Rok od"
+              placeholder="Rok od"
+              value={filters.yearFrom || "Libovolně"}
+              onChange={(v) =>
+                setFilter("yearFrom", v === "Libovolně" ? "" : v ?? "")
+              }
+              options={YEAR_OPTIONS}
+            />
+            <Select
+              label="Rok do"
+              placeholder="Rok do"
+              value={filters.yearTo || "Libovolně"}
+              onChange={(v) =>
+                setFilter("yearTo", v === "Libovolně" ? "" : v ?? "")
+              }
+              options={YEAR_OPTIONS}
+            />
+          </div>
 
               {/* Row 2: Nájezd od | Nájezd do | Palivo | Převodovka */}
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1082,10 +1029,26 @@ export function AdvancedSearchSection() {
                   options={[...FEATURE_OPTIONS]}
                 />
               </div>
-            </div>
-          )}
+
+          <div className="mt-4 flex items-center justify-end gap-2 text-[11px]">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-slate-600 hover:bg-slate-50"
+            >
+              Resetovat
+            </button>
+            <GradientButton
+              variant="primary"
+              className="px-4 py-1.5 text-xs"
+              rightIcon={<ArrowRight className="h-3 w-3" />}
+              onClick={handleApply}
+            >
+              Použít filtry
+            </GradientButton>
+          </div>
         </div>
-      </GlassCard>
+      )}
 
     </div>
   );

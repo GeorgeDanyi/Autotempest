@@ -17,8 +17,9 @@ import { ComboBox, Select } from "@/components/filters";
 import { GradientButton } from "@/components/price-trends/GradientButton";
 import { GlassCard } from "@/components/price-trends/GlassCard";
 import { PriceTrendChartCard } from "@/components/analyze/PriceTrendChartCard";
-import { PriceDistributionCard } from "@/components/analyze/PriceDistributionCard";
 import { MileageScatterCard } from "@/components/analyze/MileageScatterCard";
+import { YearPriceCard } from "@/components/analyze/YearPriceCard";
+import { FuelPriceCard } from "@/components/analyze/FuelPriceCard";
 import { BuyerCard } from "@/components/analyze/BuyerCard";
 import { SellerCard } from "@/components/analyze/SellerCard";
 import { FlipperCard } from "@/components/analyze/FlipperCard";
@@ -1036,8 +1037,38 @@ export function AnalyzePageClient() {
               <MileageScatterCard analysisResult={analysisResult} />
             </div>
             <div className="lg:col-span-4">
-              <PriceDistributionCard analysisResult={analysisResult} />
+              <YearPriceCard
+                analysisResult={
+                  analysisResult
+                    ? {
+                        model_key: analysisResult.model_key,
+                        year_from: parsed.yearFrom ?? undefined,
+                        year_to: parsed.yearTo ?? undefined,
+                        fuel: current.fuel,
+                        engine_key: parsed.engine ?? undefined,
+                      }
+                    : null
+                }
+                selectedYear={
+                  parsed.yearFrom && parsed.yearTo && parsed.yearFrom === parsed.yearTo
+                    ? parsed.yearFrom
+                    : parsed.yearFrom ?? parsed.yearTo ?? null
+                }
+              />
             </div>
+          </div>
+          <div className="mt-6 lg:mt-8">
+            <FuelPriceCard
+              analysisResult={
+                analysisResult
+                  ? {
+                      model_key: analysisResult.model_key,
+                      year_from: parsed.yearFrom ?? undefined,
+                      year_to: parsed.yearTo ?? undefined,
+                    }
+                  : null
+              }
+            />
           </div>
         </section>
 

@@ -2,18 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
 import { ANALYZE_CARD, ANALYZE_CARD_PADDING } from "@/components/analyze/cardStyles";
-import { SafeResponsiveChart } from "@/components/charts/SafeResponsiveChart";
 import type { SharedAnalysisResult } from "@/lib/pricing/types";
 import { formatCurrencyCZK } from "@/lib/ui";
 
@@ -25,14 +14,6 @@ type MileagePoint = {
 
 const GRID_STROKE = "rgba(148,163,184,0.15)";
 const MIN_POINTS_TO_SHOW = 3;
-
-const MILEAGE_BANDS = [
-  { label: "0–50k", min: 0, max: 50_000 },
-  { label: "50–100k", min: 50_000, max: 100_000 },
-  { label: "100–150k", min: 100_000, max: 150_000 },
-  { label: "150–200k", min: 150_000, max: 200_000 },
-  { label: "200k+", min: 200_000, max: Number.POSITIVE_INFINITY },
-];
 
 type MileageScatterCardProps = {
   analysisResult: SharedAnalysisResult | null;
@@ -61,7 +42,11 @@ export function MileageScatterCard({ analysisResult }: MileageScatterCardProps) 
     }
     const params = new URLSearchParams();
     params.set("model_key", modelKey);
-    if (resolvedBucket) params.set("resolved_bucket", resolvedBucket);
+    const hasExplicitFilters =
+      yearFrom != null || yearTo != null || mileageFrom != null || mileageTo != null;
+    if (resolvedBucket && resolvedBucket !== "all" && hasExplicitFilters) {
+      params.set("resolved_bucket", resolvedBucket);
+    }
     if (mileageFrom != null) params.set("mileageFrom", String(mileageFrom));
     if (mileageTo != null) params.set("mileageTo", String(mileageTo));
     if (yearFrom) params.set("yearFrom", String(yearFrom));
@@ -100,27 +85,83 @@ export function MileageScatterCard({ analysisResult }: MileageScatterCardProps) 
       .finally(() => setLoading(false));
   }, [modelKey, resolvedBucket, mileageFrom, mileageTo, yearFrom, yearTo]);
 
-  const bandData = useMemo(() => {
-    return MILEAGE_BANDS.map((band) => {
-      const inBand = points.filter((p) => p.mileage >= band.min && p.mileage < band.max);
-      if (inBand.length === 0) return null;
-      const sorted = inBand
-        .map((p) => p.price)
-        .filter((n): n is number => n != null && Number.isFinite(n))
-        .sort((a, b) => a - b);
-      if (sorted.length === 0) return null;
-      const medianPrice = sorted[Math.floor(sorted.length / 2)]!;
-      return { label: band.label, median: medianPrice, count: inBand.length };
-    }).filter(Boolean) as { label: string; median: number; count: number }[];
-  }, [points]);
+  const hasSegment =
+    mileageFrom != null ||
+    mileageTo != null ||
+    yearFrom != null ||
+    yearTo != null;
 
-  const showChart = points.length >= MIN_POINTS_TO_SHOW && bandData.length >= 1;
+  const chartData = useMemo(() => {
+    const yearFromNumber = yearFrom == null ? null : Number(yearFrom);
+    const yearToNumber = yearTo == null ? null : Number(yearTo);
+    return points.map((p) => {
+      const inMileageRange =
+        (mileageFrom == null || p.mileage >= mileageFrom) &&
+        (mileageTo == null || p.mileage <= mileageTo);
+      const inYearRange =
+        (yearFromNumber == null || (p.year != null && p.year >= yearFromNumber)) &&
+        (yearToNumber == null || (p.year != null && p.year <= yearToNumber));
+      return {
+        mileage: p.mileage,
+        price: p.price,
+        year: p.year,
+        inSegment: hasSegment ? inMileageRange && inYearRange : true,
+      };
+    });
+  }, [points, hasSegment, mileageFrom, mileageTo, yearFrom, yearTo]);
+
+  const regression = useMemo(() => {
+    if (chartData.length < 2) return null;
+    const n = chartData.length;
+    const sumX = chartData.reduce((acc, p) => acc + p.mileage, 0);
+    const sumY = chartData.reduce((acc, p) => acc + p.price, 0);
+    const sumXY = chartData.reduce((acc, p) => acc + p.mileage * p.price, 0);
+    const sumXX = chartData.reduce((acc, p) => acc + p.mileage * p.mileage, 0);
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) return null;
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+    const intercept = (sumY - slope * sumX) / n;
+    const minMileage = Math.min(...chartData.map((p) => p.mileage));
+    const maxMileage = Math.max(...chartData.map((p) => p.mileage));
+    return {
+      slope,
+      intercept,
+      start: { x: minMileage, y: slope * minMileage + intercept },
+      end: { x: maxMileage, y: slope * maxMileage + intercept },
+    };
+  }, [chartData]);
+
+  const underTrendCount = useMemo(() => {
+    if (!regression) return 0;
+    return chartData.filter(
+      (p) => p.inSegment && p.price < regression.slope * p.mileage + regression.intercept,
+    ).length;
+  }, [chartData, regression]);
+
+  const showChart = chartData.length >= MIN_POINTS_TO_SHOW;
   const showNoData =
-    !loading && !error && modelKey != null && (points.length < MIN_POINTS_TO_SHOW || bandData.length === 0);
+    !loading && !error && modelKey != null && chartData.length < MIN_POINTS_TO_SHOW;
+
+  const SVG_W = 600;
+  const SVG_H = 220;
+  const PAD = { top: 16, right: 24, bottom: 32, left: 52 };
+  const plotW = SVG_W - PAD.left - PAD.right;
+  const plotH = SVG_H - PAD.top - PAD.bottom;
+
+  const minX = showChart ? Math.min(...chartData.map((p) => p.mileage)) : 0;
+  const maxX = showChart ? Math.max(...chartData.map((p) => p.mileage)) : 1;
+  const minY = showChart ? Math.min(...chartData.map((p) => p.price)) : 0;
+  const maxY = showChart ? Math.max(...chartData.map((p) => p.price)) : 1;
+
+  const toSvgX = (v: number) =>
+    PAD.left + ((v - minX) / (maxX - minX || 1)) * plotW;
+  const toSvgY = (v: number) =>
+    PAD.top + plotH - ((v - minY) / (maxY - minY || 1)) * plotH;
 
   return (
     <div
-      className={`flex h-full flex-col ${ANALYZE_CARD} ${ANALYZE_CARD_PADDING}`}
+      className={`flex flex-col ${ANALYZE_CARD} ${ANALYZE_CARD_PADDING}`}
+      style={{ minHeight: 320 }}
       aria-label="Cena dle nájezdu"
     >
       <div className="space-y-1">
@@ -132,149 +173,99 @@ export function MileageScatterCard({ analysisResult }: MileageScatterCardProps) 
         </p>
       </div>
 
-      <div className="mt-6">
-        <SafeResponsiveChart className="h-[220px] w-full min-h-[220px]">
-          {loading && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Načítám…
-            </div>
-          )}
-          {!loading && error && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Chyba načtení dat.
-            </div>
-          )}
-          {!loading && !error && showNoData && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Nedostatek dat pro vztah nájezdu a ceny.
-            </div>
-          )}
-          {!loading && !error && showChart && (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={bandData}
-                margin={{ top: 16, right: 24, bottom: 4, left: 4 }}
+      <div
+        style={{ width: "100%", height: SVG_H, marginTop: "1.5rem", minWidth: 0, display: "block" }}
+      >
+        {loading && (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            Načítám…
+          </div>
+        )}
+        {!loading && error && (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            Chyba načtení dat.
+          </div>
+        )}
+        {!loading && !error && showNoData && (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            Nedostatek dat pro vztah nájezdu a ceny.
+          </div>
+        )}
+        {!loading && !error && showChart && (
+          <svg
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            style={{ width: "100%", height: SVG_H }}
+          >
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+              <line
+                // eslint-disable-next-line react/no-array-index-key
+                key={t}
+                x1={PAD.left}
+                x2={SVG_W - PAD.right}
+                y1={PAD.top + t * plotH}
+                y2={PAD.top + t * plotH}
+                stroke="#e2e8f0"
+                strokeDasharray="3 6"
+              />
+            ))}
+            {regression && (
+              <line
+                x1={toSvgX(regression.start.x)}
+                y1={toSvgY(regression.start.y)}
+                x2={toSvgX(regression.end.x)}
+                y2={toSvgY(regression.end.y)}
+                stroke="#185FA5"
+                strokeWidth={2}
+                strokeOpacity={0.6}
+              />
+            )}
+            {chartData.map((p, i) => (
+              <circle
+                // eslint-disable-next-line react/no-array-index-key
+                key={i}
+                cx={toSvgX(p.mileage)}
+                cy={toSvgY(p.price)}
+                r={4}
+                fill={p.inSegment !== false ? "#185FA5" : "#B5D4F4"}
+                fillOpacity={0.7}
+              />
+            ))}
+            {[minX, (minX + maxX) / 2, maxX].map((v, i) => (
+              <text
+                // eslint-disable-next-line react/no-array-index-key
+                key={i}
+                x={toSvgX(v)}
+                y={SVG_H - 6}
+                textAnchor="middle"
+                fontSize={11}
+                fill="#94a3b8"
               >
-                <defs>
-                  <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  stroke="rgba(148,163,184,0.15)"
-                  strokeDasharray="3 6"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
-                <YAxis
-                  tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={44}
-                />
-                {median != null && (
-                  <ReferenceLine
-                    y={median}
-                    stroke="#64748b"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 3"
-                    strokeOpacity={0.5}
-                    label={{
-                      value: `Medián ${Math.round(median / 1000)}k`,
-                      position: "insideTopRight",
-                      fontSize: 10,
-                      fill: "#94a3b8",
-                    }}
-                  />
-                )}
-                <Tooltip
-                  wrapperStyle={{ zIndex: 50 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload as {
-                      label: string;
-                      median: number;
-                      count: number;
-                    };
-                    return (
-                      <div
-                        style={{
-                          background: "#1e293b",
-                          borderRadius: 10,
-                          padding: "10px 14px",
-                          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                          fontSize: 12,
-                        }}
-                      >
-                        <p
-                          style={{
-                            color: "rgba(255,255,255,0.9)",
-                            fontWeight: 600,
-                            marginBottom: 4,
-                          }}
-                        >
-                          Nájezd {d.label} km
-                        </p>
-                        <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                          Medián:{" "}
-                          <span style={{ color: "white", fontWeight: 500 }}>
-                            {d.median.toLocaleString("cs-CZ")} Kč
-                          </span>
-                        </p>
-                        <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                          Vozidel:{" "}
-                          <span style={{ color: "white", fontWeight: 500 }}>
-                            {d.count}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="median"
-                  stroke="#0ea5e9"
-                  strokeWidth={2.5}
-                  fill="url(#priceGradient)"
-                  dot={{
-                    r: 4,
-                    fill: "#0ea5e9",
-                    strokeWidth: 2,
-                    stroke: "white",
-                  }}
-                  activeDot={{
-                    r: 6,
-                    fill: "#0ea5e9",
-                    stroke: "white",
-                    strokeWidth: 2,
-                  }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </SafeResponsiveChart>
+                {Math.round(v / 1000)}k
+              </text>
+            ))}
+            {[minY, (minY + maxY) / 2, maxY].map((v, i) => (
+              <text
+                // eslint-disable-next-line react/no-array-index-key
+                key={i}
+                x={PAD.left - 6}
+                y={toSvgY(v) + 4}
+                textAnchor="end"
+                fontSize={11}
+                fill="#94a3b8"
+              >
+                {Math.round(v / 1000)}k
+              </text>
+            ))}
+          </svg>
+        )}
       </div>
 
       {showChart && (
-        <div className="mt-2 flex items-center gap-5 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-5 rounded bg-sky-400" />
-            Medián ceny v pásmu
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 border-t border-dashed border-slate-400/60" />
-            Celkový medián
-          </span>
-        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          {underTrendCount > 0
+            ? `${underTrendCount} aut v segmentu je pod ideální křivkou — potenciálně podhodnocená.`
+            : `Zobrazeno ${chartData.length} aut. Křivka ukazuje ideální poměr ceny a nájezdu.`}
+        </p>
       )}
     </div>
   );

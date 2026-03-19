@@ -135,38 +135,17 @@ export default function HomePage() {
             Reálné ceny očištěné o extrémy. Zjistěte férovou hodnotu vozu a získejte taktickou výhodu pro nákup, prodej i flipování.
           </p>
 
-          <form
-            className="mt-6 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm max-w-lg mx-auto"
-          >
-            <svg
-              className="h-4 w-4 text-slate-400 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <div className="min-w-[280px] flex-1 flex items-center h-5">
-              <span className="text-sm text-slate-700">{typewriterText}</span>
-              <span className="ml-[1px] inline-block h-[18px] w-[2px] bg-slate-600 animate-pulse shrink-0" />
-            </div>
-            <button
-              type="button"
-              onClick={() => document.getElementById("search")?.scrollIntoView({ behavior: "smooth" })}
-              className="ml-2 shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap"
-            >
-              Vyzkoušet
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </form>
+          <div className="mt-4 w-full max-w-5xl">
+            <AdvancedSearchSection />
+          </div>
+
+          <p className="mt-20 sm:mt-28 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-8">
+            Ukázka výsledku analýzy
+          </p>
         </div>
 
         {/* Floating zone */}
-        <div className="relative mx-auto mt-6 max-w-5xl px-4" style={{ height: "380px" }}>
+        <div className="relative mx-auto mt-0 max-w-5xl px-4" style={{ height: "380px" }}>
           {/* Centrální karta — věrná /analyze stránce */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -258,9 +237,9 @@ export default function HomePage() {
                 initial={{ opacity: 0, x: -60, y: 20 }}
                 animate={{ opacity: 1, x: 0, y: 0 }}
                 exit={{ opacity: 0, x: -40, y: 10 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26, delay: 0.05 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.1 }}
                 className="absolute z-5 rounded-[18px] border border-black/[0.07] bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.10)]"
-                style={{ left: "-1%", top: "-18px", width: "220px", rotate: "-4deg" }}
+                style={{ left: "1%", top: "15px", width: "220px", rotate: "-4deg" }}
               >
                 <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.1em] text-blue-700">
                   Kupujete?
@@ -287,9 +266,9 @@ export default function HomePage() {
                 initial={{ opacity: 0, x: -60, y: -20 }}
                 animate={{ opacity: 1, x: 0, y: 0 }}
                 exit={{ opacity: 0, x: -40, y: -10 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26, delay: 0.1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
                 className="absolute z-5 rounded-[18px] border border-black/[0.07] bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.10)]"
-                style={{ left: "-2%", top: "168px", width: "220px", rotate: "3.5deg" }}
+                style={{ left: "0%", top: "215px", width: "220px", rotate: "3.5deg" }}
               >
                 <p className="mb-2.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-emerald-700">
                   Prodáváte?
@@ -328,9 +307,9 @@ export default function HomePage() {
                 initial={{ opacity: 0, x: 60, y: 20 }}
                 animate={{ opacity: 1, x: 0, y: 0 }}
                 exit={{ opacity: 0, x: 40, y: 10 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26, delay: 0.08 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.15 }}
                 className="absolute z-5 rounded-[18px] border border-black/[0.07] bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.10)]"
-                style={{ right: "-1%", top: "-18px", width: "215px", rotate: "4deg" }}
+                style={{ right: "1%", top: "15px", width: "215px", rotate: "4deg" }}
               >
                 <p className="relative mb-2.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-orange-700">
                   Flipujete?
@@ -367,9 +346,9 @@ export default function HomePage() {
                 initial={{ opacity: 0, x: 60, y: -20 }}
                 animate={{ opacity: 1, x: 0, y: 0 }}
                 exit={{ opacity: 0, x: 40, y: -10 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26, delay: 0.12 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.25 }}
                 className="absolute z-5 rounded-[18px] border border-black/[0.07] bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.10)]"
-                style={{ right: "-2%", top: "168px", width: "212px", rotate: "-3.5deg" }}
+                style={{ right: "0%", top: "215px", width: "212px", rotate: "-3.5deg" }}
               >
                 <p className="mb-2.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-500">
                   Trh dnes
@@ -400,17 +379,6 @@ export default function HomePage() {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </section>
-
-      {/* Vyhledávání */}
-      <section id="search" className="px-4 pt-16 pb-16 bg-slate-50/80 border-t border-slate-100">
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-6 text-center">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">Začněte hned</p>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Zadejte auto a zjistěte cenu</h2>
-          </div>
-          <AdvancedSearchSection />
         </div>
       </section>
 
