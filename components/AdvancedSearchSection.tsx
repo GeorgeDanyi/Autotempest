@@ -870,6 +870,9 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
               {rangeError}
             </p>
           )}
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mb-3">
+            Základní parametry
+          </p>
           {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <ComboBox
@@ -932,6 +935,9 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
             </div>
           </div>
 
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mt-5 mb-3">
+            Technické parametry
+          </p>
               {/* Row 2: Nájezd od | Nájezd do | Palivo | Převodovka */}
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
@@ -981,6 +987,9 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
               </div>
 
               {/* Row 3: Motor | Výkon | Karoserie | Pohon */}
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mt-5 mb-3">
+                Detaily vozu
+              </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <ComboBox
                   label="Motor"
@@ -1018,13 +1027,13 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
                 />
               </div>
 
-          <div className="mt-4 flex items-center justify-end gap-2 text-[11px]">
+          <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-slate-600 hover:bg-slate-50"
+              className="text-[12px] text-slate-400 hover:text-slate-600 transition-colors mr-auto"
             >
-              Resetovat
+              Vymazat vše
             </button>
             <GradientButton
               variant="primary"
