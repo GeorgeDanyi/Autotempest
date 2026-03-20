@@ -2,19 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { ANALYZE_CARD, ANALYZE_CARD_PADDING } from "@/components/analyze/cardStyles";
-import { SafeResponsiveChart } from "@/components/charts/SafeResponsiveChart";
-import type { SharedAnalysisResult } from "@/lib/pricing/types";
-import { formatCurrencyCZK } from "@/lib/ui";
+import { formatCurrencyCZK, roundToNearest } from "@/lib/ui";
 
 type YearPricePoint = {
   year: number;
@@ -31,11 +20,12 @@ type YearPriceCardProps = {
     engine_key?: string | null;
   } | null;
   selectedYear?: number | null;
+  currentPrice?: number | null;
 };
 
 const MIN_POINTS = 3;
 
-export function YearPriceCard({ analysisResult, selectedYear }: YearPriceCardProps) {
+export function YearPriceCard({ analysisResult, selectedYear, currentPrice }: YearPriceCardProps) {
   const searchParams = useSearchParams();
   const modelKey = analysisResult?.model_key ?? null;
 
@@ -100,203 +90,194 @@ export function YearPriceCard({ analysisResult, selectedYear }: YearPriceCardPro
 
   const hasEnoughData = points.length >= MIN_POINTS;
 
-  const medianOfYears = useMemo(() => {
+  const regression = useMemo(() => {
     if (!hasEnoughData) return null;
-    const sorted = points
-      .map((p) => p.median_price_czk)
-      .filter((n) => n != null && Number.isFinite(n))
-      .sort((a, b) => a - b);
-    if (sorted.length === 0) return null;
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 === 0
-      ? Math.round((sorted[mid - 1]! + sorted[mid]!) / 2)
-      : sorted[mid]!;
+    const sorted = [...points].sort((a, b) => a.year - b.year);
+    if (sorted.length < 2) return null;
+    const n = sorted.length;
+    const sumX = sorted.reduce((acc, p) => acc + p.year, 0);
+    const sumY = sorted.reduce((acc, p) => acc + p.median_price_czk, 0);
+    const sumXY = sorted.reduce((acc, p) => acc + p.year * p.median_price_czk, 0);
+    const sumXX = sorted.reduce((acc, p) => acc + p.year * p.year, 0);
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) return null;
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+    const avgPrice = sumY / n;
+    return { slope, avgPrice };
   }, [points, hasEnoughData]);
 
+  const annualDeclinePct = useMemo(() => {
+    if (!regression || !Number.isFinite(regression.avgPrice) || regression.avgPrice === 0) {
+      return null;
+    }
+    const raw = Math.abs((regression.slope / regression.avgPrice) * 100);
+    if (!Number.isFinite(raw)) return null;
+    return Math.min(50, Math.round(raw * 10) / 10);
+  }, [regression]);
+
+  const projection = useMemo(() => {
+    if (!hasEnoughData || currentPrice == null || currentPrice <= 0 || annualDeclinePct == null) {
+      return null;
+    }
+    const prices: number[] = [currentPrice];
+    for (let i = 1; i < 4; i += 1) {
+      const prev = prices[i - 1]!;
+      prices.push(Math.round(prev * (1 - annualDeclinePct / 100)));
+    }
+    return prices;
+  }, [hasEnoughData, currentPrice, annualDeclinePct]);
+
   const insight = useMemo(() => {
-    if (!hasEnoughData) {
+    if (!hasEnoughData || !projection || annualDeclinePct == null) {
       return "Nedostatek dat pro tento segment.";
     }
-    if (!selectedYear) {
-      return "Zobrazeny všechny ročníky modelu v databázi.";
-    }
-    const selectedPoint = points.find((p) => p.year === selectedYear) ?? null;
-    if (!selectedPoint || !medianOfYears) {
-      return "Zobrazeny všechny ročníky modelu v databázi.";
-    }
-    if (selectedPoint.median_price_czk <= medianOfYears) {
-      return `Ročník ${selectedYear} patří k cenově dostupnějším — dobrý poměr ceny a stáří.`;
-    }
-    return `Ročník ${selectedYear} je v prémiové části generace.`;
-  }, [hasEnoughData, points, selectedYear, medianOfYears]);
-
-  const dataForChart = useMemo(() => {
-    if (!hasEnoughData) return [];
-    const maxPrice = Math.max(
-      ...points.map((p) => p.median_price_czk).filter((n) => n != null && Number.isFinite(n)),
-    );
-    return points.map((p) => {
-      const distance =
-        selectedYear != null ? Math.abs(p.year - selectedYear) : 0;
-      const normalizedDistance =
-        selectedYear != null && maxPrice > 0 ? Math.min(distance / 8, 1) : 0;
-      const baseColor = 0x18_5f_a5;
-      const baseR = (baseColor >> 16) & 0xff;
-      const baseG = (baseColor >> 8) & 0xff;
-      const baseB = baseColor & 0xff;
-      const factor = 0.35 + (1 - normalizedDistance) * 0.65;
-      const r = Math.round(baseR * factor);
-      const g = Math.round(baseG * factor);
-      const b = Math.round(baseB * factor);
-      const fill = `rgb(${r}, ${g}, ${b})`;
-
-      const isSelected = selectedYear != null && p.year === selectedYear;
-
-      return {
-        ...p,
-        fill,
-        isSelected,
-      };
-    });
-  }, [points, hasEnoughData, selectedYear]);
+    const finalPrice = projection[3]!;
+    const totalPct = currentPrice && currentPrice > 0
+      ? Math.round(((currentPrice - finalPrice) / currentPrice) * 100)
+      : null;
+    return totalPct != null
+      ? `Za 3 roky odhadovaná hodnota: ${formatCurrencyCZK(roundToNearest(finalPrice))} (pokles o ${totalPct} %).`
+      : `Za 3 roky odhadovaná hodnota: ${formatCurrencyCZK(roundToNearest(finalPrice))}.`;
+  }, [hasEnoughData, projection, annualDeclinePct, currentPrice]);
 
   const showNoData =
-    !loading && !error && modelKey != null && !hasEnoughData;
+    !loading && !error && modelKey != null && (!hasEnoughData || !projection || annualDeclinePct == null);
+
+  const SVG_W = 600;
+  const SVG_H = 220;
+  const PAD = { top: 24, right: 32, bottom: 36, left: 48 };
+  const plotW = SVG_W - PAD.left - PAD.right;
+  const plotH = SVG_H - PAD.top - PAD.bottom;
+
+  const labels = ["Dnes", "+1 rok", "+2 roky", "+3 roky"];
+
+  const priceMin = projection ? Math.min(...projection) : 0;
+  const priceMax = projection ? Math.max(...projection) : 1;
+  const minY = priceMin > 0 ? priceMin * 0.9 : 0;
+  const maxY = priceMax * 1.05;
+
+  const toSvgX = (index: number) =>
+    PAD.left + (index / Math.max(1, labels.length - 1)) * plotW;
+  const toSvgY = (v: number) =>
+    PAD.top + plotH - ((v - minY) / (maxY - minY || 1)) * plotH;
 
   return (
     <div
       className={`flex h-full flex-col ${ANALYZE_CARD} ${ANALYZE_CARD_PADDING}`}
-      aria-label="Cena dle roku výroby"
+      aria-label="Ztráta hodnoty v čase"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold tracking-tight text-slate-800">
-            Cena dle roku výroby
+            Ztráta hodnoty v čase
           </h3>
           <p className="text-[11px] text-slate-500">
-            Jak se vyvíjí medián ceny v jednotlivých ročnících.
+            Odhadovaný vývoj ceny po koupi.
           </p>
         </div>
-        {selectedYear != null && (
-          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-            Váš rok: {selectedYear}
+        {annualDeclinePct != null && (
+          <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-[11px] font-medium text-red-600 ring-1 ring-red-100">
+            −{annualDeclinePct} % / rok
           </span>
         )}
       </div>
 
-      <div className="mt-6">
-        <SafeResponsiveChart className="h-[220px] w-full min-h-[220px]">
-          {loading && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Načítám…
-            </div>
-          )}
-          {!loading && error && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Chyba načtení dat.
-            </div>
-          )}
-          {!loading && !error && showNoData && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Nedostatek dat pro tento segment.
-            </div>
-          )}
-          {!loading && !error && hasEnoughData && (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={dataForChart}
-                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
+      <div className="mt-5">
+        {loading && (
+          <div className="flex h-[220px] items-center justify-center text-sm text-slate-500">
+            Načítám…
+          </div>
+        )}
+        {!loading && error && (
+          <div className="flex h-[220px] items-center justify-center text-sm text-slate-500">
+            Chyba načtení dat.
+          </div>
+        )}
+        {!loading && !error && showNoData && (
+          <div className="flex h-[220px] items-center justify-center text-sm text-slate-500">
+            Nedostatek dat pro predikci.
+          </div>
+        )}
+        {!loading && !error && !showNoData && projection && (
+          <svg
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            style={{ width: "100%", height: SVG_H }}
+          >
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <line
+                key={t}
+                x1={PAD.left}
+                x2={SVG_W - PAD.right}
+                y1={PAD.top + t * plotH}
+                y2={PAD.top + t * plotH}
+                stroke="#e2e8f0"
+                strokeDasharray="3 6"
+              />
+            ))}
+            <path
+              d={projection
+                .map((price, index) => {
+                  const x = toSvgX(index);
+                  const y = toSvgY(price);
+                  return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+                })
+                .join(" ")}
+              fill="none"
+              stroke="#185FA5"
+              strokeWidth={2.5}
+            />
+            {projection.map((price, index) => {
+              const cx = toSvgX(index);
+              const cy = toSvgY(price);
+              const isNow = index === 0;
+              return (
+                // eslint-disable-next-line react/no-array-index-key
+                <circle
+                  key={index}
+                  cx={cx}
+                  cy={cy}
+                  r={isNow ? 7 : 5}
+                  fill={isNow ? "#185FA5" : "#ffffff"}
+                  stroke="#185FA5"
+                  strokeWidth={2}
+                />
+              );
+            })}
+            {projection.map((price, index) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <text
+                key={`label-${index}`}
+                x={(index / Math.max(1, labels.length - 1)) * SVG_W}
+                y={SVG_H - 10}
+                textAnchor={index === 0 ? "start" : index === labels.length - 1 ? "end" : "middle"}
+                fontSize={12}
+                fill="#64748b"
               >
-                <CartesianGrid
-                  stroke="rgba(148,163,184,0.15)"
-                  strokeDasharray="3 6"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="year"
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={6}
-                />
-                <YAxis
-                  tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={44}
-                />
-                <Tooltip
-                  wrapperStyle={{ zIndex: 50 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0]
-                      ?.payload as YearPricePoint & {
-                      isSelected?: boolean;
-                    };
-                    return (
-                      <div
-                        style={{
-                          background: "#1e293b",
-                          borderRadius: 10,
-                          padding: "10px 14px",
-                          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                          fontSize: 12,
-                        }}
-                      >
-                        <p
-                          style={{
-                            color: "rgba(255,255,255,0.9)",
-                            fontWeight: 600,
-                            marginBottom: 4,
-                          }}
-                        >
-                          Rok {d.year}
-                        </p>
-                        <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                          Medián:{" "}
-                          <span style={{ color: "white", fontWeight: 500 }}>
-                            {formatCurrencyCZK(d.median_price_czk)}
-                          </span>
-                        </p>
-                        <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                          Inzerátů:{" "}
-                          <span style={{ color: "white", fontWeight: 500 }}>
-                            {d.sample_size}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="median_price_czk"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive
-                  animationDuration={500}
-                  animationEasing="ease-out"
-                >
-                  {dataForChart.map((entry, index) => (
-                    <rect
-                      key={entry.year}
-                      x={0}
-                      y={0}
-                      width={0}
-                      height={0}
-                    />
-                  ))}
-                  {/*
-                    Používáme funkci fill dle payloadu přes props v data,
-                    Recharts použije `fill` přímo z dat pro jednotlivé bary.
-                  */}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </SafeResponsiveChart>
+                {labels[index]}
+              </text>
+            ))}
+            {[minY, (minY + maxY) / 2, maxY].map((v, index) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <text
+                key={`y-${index}`}
+                x={PAD.left - 8}
+                y={toSvgY(v) + 4}
+                textAnchor="end"
+                fontSize={11}
+                fill="#94a3b8"
+              >
+                {Math.round(v / 1000)}k
+              </text>
+            ))}
+          </svg>
+        )}
       </div>
 
       <p className="mt-3 text-[11px] text-slate-500">{insight}</p>
+      <p className="mt-1 text-[10px] text-slate-400">
+        Odhad na základě historických dat modelu. Skutečný vývoj ceny závisí na stavu vozu a tržních podmínkách.
+      </p>
     </div>
   );
 }

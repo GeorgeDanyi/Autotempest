@@ -27,7 +27,8 @@ import { MethodologySection } from "@/components/analyze/MethodologySection";
 import { ANALYZE_CARD, ANALYZE_CARD_PADDING, CARD_LABEL } from "@/components/analyze/cardStyles";
 import { Container } from "@/components/layout/primitives";
 import type { PriceApiResponse, SharedAnalysisResult } from "@/lib/pricing/types";
-import { formatCurrencyCZK } from "@/lib/ui";
+import { formatCurrencyCZK, roundToNearest } from "@/lib/ui";
+import { getSampleBadge } from "@/lib/ui/sampleSize";
 import { fromEngineKey, toEngineKey, ENGINE_OPTIONS } from "@/lib/analyze/engineKeys";
 import {
   parseAnalyzeParams,
@@ -695,6 +696,8 @@ export function AnalyzePageClient() {
   const minPrice = analysisResult?.min_price_czk ?? null;
   const avgMileageKm = (analysis.data as Record<string, unknown>)
     ?.avg_mileage_km as number | null ?? null;
+  const avgDaysOnMarket = (analysis.data as Record<string, unknown>)
+    ?.avg_days_on_market as number | null ?? null;
   const maxPrice = analysisResult?.max_price_czk ?? null;
   const sampleSize = analysisResult?.sample_size ?? null;
   const confidenceScore = analysisResult?.confidence_score ?? null;
@@ -849,32 +852,34 @@ export function AnalyzePageClient() {
               <>
                 <div className="flex items-center justify-between">
                   <p className={CARD_LABEL}>Férová cena segmentu</p>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        sampleSize != null && sampleSize >= 20 ? "bg-emerald-400" : "bg-amber-400"
-                      }`}
-                    />
-                    <span
-                      className={`text-[11px] font-medium ${
-                        sampleSize != null && sampleSize >= 20 ? "text-emerald-600" : "text-amber-600"
-                      }`}
-                    >
-                      {sampleSize != null && sampleSize >= 50
-                        ? "Aktivní trh"
-                        : sampleSize != null && sampleSize >= 20
-                          ? "Normální trh"
-                          : sampleSize != null && sampleSize >= 5
-                            ? "Řídký trh"
-                            : "Málo dat"}
-                      {sampleSize != null ? ` · ${sampleSize} inzerátů` : ""}
-                    </span>
+                  <div className="flex flex-col items-end gap-1">
+                    {analysisResult?.sample_size != null && (() => {
+                      const { text, tier } = getSampleBadge(analysisResult.sample_size);
+                      const styles = {
+                        small: "bg-amber-50 text-amber-700 ring-amber-200",
+                        medium: "bg-slate-50 text-slate-600 ring-slate-200",
+                        large: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+                      }[tier];
+                      const dot = {
+                        small: "bg-amber-500",
+                        medium: "bg-slate-400",
+                        large: "bg-emerald-500",
+                      }[tier];
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${styles}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                          {text}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 <div className="mt-4 flex items-baseline gap-3">
                   <p className="tabular-nums text-[68px] font-semibold leading-none tracking-[-3px] text-slate-900">
-                    {fairPrice != null ? fairPrice.toLocaleString("cs-CZ") : "—"}
+                    {fairPrice != null
+                      ? roundToNearest(fairPrice).toLocaleString("cs-CZ")
+                      : "—"}
                   </p>
                   <p className="pb-2 text-2xl font-normal text-slate-400">Kč</p>
                   {fairPrice != null && (
@@ -965,23 +970,15 @@ export function AnalyzePageClient() {
 
                 <div className="h-px bg-slate-100" />
 
-                <div className="mt-6 grid grid-cols-4 gap-4">
-                  <div className="rounded-xl bg-slate-50 px-4 py-3">
-                    <p className={CARD_LABEL}>Inzerátů</p>
-                    <p className="mt-1.5 text-base font-semibold text-slate-800">
-                      {sampleSize ?? "—"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-400">aktivní dnes</p>
-                  </div>
+                <div className="mt-6 grid grid-cols-3 gap-4">
                   <div className="rounded-xl bg-slate-50 px-4 py-3">
                     <p className={CARD_LABEL}>Průměrný nájezd</p>
                     <p className="mt-1.5 text-base font-semibold text-slate-800">
-                      {avgMileageKm != null
-                        ? `${Math.round(avgMileageKm / 1000)} tis. km`
-                        : '—'}
+                      {avgMileageKm != null ? `${Math.round(avgMileageKm / 1000)} tis. km` : "—"}
                     </p>
                     <p className="mt-1 text-[11px] text-slate-400">těžiště segmentu</p>
                   </div>
+
                   <div className="rounded-xl bg-slate-50 px-4 py-3">
                     <p className={CARD_LABEL}>Férové pásmo</p>
                     <p className="mt-1.5 text-base font-semibold text-slate-800">
@@ -991,12 +988,26 @@ export function AnalyzePageClient() {
                     </p>
                     <p className="mt-1 text-[11px] text-slate-400">P25 až P75</p>
                   </div>
+
                   <div className="rounded-xl bg-slate-50 px-4 py-3">
-                    <p className={CARD_LABEL}>Aktualizováno</p>
-                    <p className="mt-1.5 text-base font-semibold text-slate-800">Dnes</p>
-                    <p className="mt-1 truncate text-[11px] text-slate-400">
-                      {context.modelLabel ?? ""}
-                      {context.yearLabel ? ` · ${context.yearLabel}` : ""}
+                    <p className={CARD_LABEL}>Spolehlivost dat</p>
+                    <p
+                      className={`mt-1.5 text-base font-semibold ${
+                        analysisResult?.confidence_label === "Vysoká"
+                          ? "text-emerald-600"
+                          : analysisResult?.confidence_label === "Střední"
+                            ? "text-amber-600"
+                            : analysisResult?.confidence_label === "Nízká"
+                              ? "text-red-500"
+                              : "text-slate-800"
+                      }`}
+                    >
+                      {analysisResult?.confidence_label ?? "—"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {analysisResult?.sample_size != null
+                        ? `${analysisResult.sample_size} vzorků · dnes`
+                        : "dnes"}
                     </p>
                   </div>
                 </div>
@@ -1026,6 +1037,7 @@ export function AnalyzePageClient() {
               p25Price={analysisResult?.p25_price_czk ?? null}
               p75Price={analysisResult?.p75_price_czk ?? null}
               sampleSize={sampleSize}
+              avgDaysOnMarket={avgDaysOnMarket ?? null}
             />
           </div>
         </section>
@@ -1049,6 +1061,7 @@ export function AnalyzePageClient() {
                       }
                     : null
                 }
+                currentPrice={analysisResult?.median_price_czk ?? null}
                 selectedYear={
                   parsed.yearFrom && parsed.yearTo && parsed.yearFrom === parsed.yearTo
                     ? parsed.yearFrom

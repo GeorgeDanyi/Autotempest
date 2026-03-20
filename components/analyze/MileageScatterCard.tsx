@@ -263,7 +263,7 @@ export function MileageScatterCard({ analysisResult }: MileageScatterCardProps) 
       {showChart && (
         <p className="mt-2 text-[11px] text-slate-500">
           {underTrendCount > 0
-            ? `${underTrendCount} aut v segmentu je pod ideální křivkou — potenciálně podhodnocená.`
+            ? `${underTrendCount} vozů prodáváno pod tržním průměrem — potenciál pro výhodný nákup.`
             : `Zobrazeno ${chartData.length} aut. Křivka ukazuje ideální poměr ceny a nájezdu.`}
         </p>
       )}

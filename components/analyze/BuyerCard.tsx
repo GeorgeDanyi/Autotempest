@@ -1,6 +1,8 @@
 "use client";
 
 import { ANALYZE_CARD, CARD_LABEL } from "@/components/analyze/cardStyles";
+import { roundToNearest } from "@/lib/ui";
+import { getSampleTier } from "@/lib/ui/sampleSize";
 
 type BuyerCardProps = {
   medianPrice: number | null;
@@ -43,6 +45,32 @@ export function BuyerCard({
         )
       : null;
 
+  const sampleTier = getSampleTier(sampleSize ?? 0);
+  const priceSpread =
+    p75Price != null && p25Price != null && p25Price > 0
+      ? p75Price / p25Price
+      : 1;
+
+  let argumentText: string;
+  if (sampleTier === "small") {
+    argumentText =
+      "Specifický segment — při vyjednávání se zaměřte na historii vozu a servisní záznamy spíše než na srovnávání cen.";
+  } else if (sampleTier === "medium" && priceSpread > 1.5) {
+    argumentText = `Rozpětí férového pásma (${Math.round(
+      (p25Price ?? 0) / 1000,
+    )}k – ${Math.round(
+      (p75Price ?? 0) / 1000,
+    )}k Kč) ukazuje na nevyzpytatelný trh. Trvejte na důkladné technické prohlídce.`;
+  } else if (sampleTier === "medium") {
+    argumentText = `Ceny jsou v tomto segmentu stabilní — férová nabídka je kolem ${
+      p25Price != null ? Math.round(p25Price / 1000) : "…"
+    }k Kč.`;
+  } else {
+    argumentText = `Silný trh s ${
+      sampleSize ?? 0
+    } vozy — srovnej více nabídek, máš silnou pozici.`;
+  }
+
   return (
     <div className={`${ANALYZE_CARD} flex h-full flex-col p-6`}>
       <div className="mb-5 flex items-center gap-3">
@@ -68,13 +96,17 @@ export function BuyerCard({
         <div className="flex items-baseline justify-between py-2.5">
           <span className="text-[12px] text-slate-500">Doporučená nabídka</span>
           <span className="text-[13px] font-semibold text-sky-600">
-            {suggestedOffer != null ? `${suggestedOffer.toLocaleString("cs-CZ")} Kč` : "—"}
+            {suggestedOffer != null
+              ? `${roundToNearest(suggestedOffer).toLocaleString("cs-CZ")} Kč`
+              : "—"}
           </span>
         </div>
         <div className="flex items-baseline justify-between py-2.5">
           <span className="text-[12px] text-slate-500">Realistické minimum</span>
           <span className="text-[13px] font-semibold text-slate-800">
-            {minimumOffer != null ? `${minimumOffer.toLocaleString("cs-CZ")} Kč` : "—"}
+            {minimumOffer != null
+              ? `${roundToNearest(minimumOffer).toLocaleString("cs-CZ")} Kč`
+              : "—"}
           </span>
         </div>
         <div className="flex items-baseline justify-between py-2.5">
@@ -89,22 +121,9 @@ export function BuyerCard({
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sky-500">
           Argument pro vyjednávání
         </p>
-        {sampleSize != null && sampleSize < 20 ? (
-          <p className="text-[11px] leading-relaxed text-sky-700">
-            Málo inzerátů na trhu — prodejce má omezené možnosti výběru kupce.
-          </p>
-        ) : sampleSize != null && sampleSize >= 50 ? (
-          <p className="text-[11px] leading-relaxed text-sky-700">
-            Silný trh s{" "}
-            <strong className="font-semibold">{sampleSize} inzeráty</strong> — srovnej více
-            nabídek, máš silnou pozici.
-          </p>
-        ) : (
-          <p className="text-[11px] leading-relaxed text-sky-700">
-            Doporučená nabídka je průměr mediánu a dolního kvartilu — reálně přijatelná pro
-            prodejce.
-          </p>
-        )}
+        <p className="text-[11px] leading-relaxed text-sky-700">
+          {argumentText}
+        </p>
       </div>
     </div>
   );

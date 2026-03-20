@@ -1,6 +1,7 @@
 "use client";
 
 import { ANALYZE_CARD, CARD_LABEL } from "@/components/analyze/cardStyles";
+import { getSampleTier } from "@/lib/ui/sampleSize";
 
 type SellerCardProps = {
   medianPrice: number | null;
@@ -19,6 +20,21 @@ export function SellerCard({
   const normalPrice = medianPrice ?? null;
   const maxPrice = p75Price != null ? Math.round(p75Price * 1.05) : null;
   const recommendedListPrice = p75Price != null ? Math.round(p75Price * 1.02) : null;
+
+  const sampleTier = getSampleTier(sampleSize ?? 0);
+
+  let sellerAdvice: string;
+  if (sampleTier === "small") {
+    sellerAdvice = `U takto specifických vozů rozhoduje trpělivost. Pro rychlý prodej míříte k ${Math.round(
+      (p25Price ?? 0) / 1000,
+    )}k Kč, pro maximální zisk čekejte na správného kupce.`;
+  } else if (sampleTier === "medium") {
+    sellerAdvice = `Standardní trh. Inzerujte na mediánu (${Math.round(
+      (medianPrice ?? 0) / 1000,
+    )}k Kč) a upravujte cenu každé 2 týdny pokud není zájem.`;
+  } else {
+    sellerAdvice = `Vysoká konkurence ${sampleSize ?? 0} podobných vozů. K prodeji nad mediánem potřebujete nadstandardní výbavu nebo perfektní prezentaci.`;
+  }
 
   return (
     <div className={`${ANALYZE_CARD} flex h-full flex-col p-6`}>
@@ -74,27 +90,7 @@ export function SellerCard({
 
       <div className="flex-1 rounded-xl bg-slate-50 px-4 py-3">
         <p className="text-[11px] leading-relaxed text-slate-500">
-          {sampleSize != null && sampleSize >= 30 ? (
-            <>
-              Na trhu je aktuálně{" "}
-              <strong className="font-semibold text-slate-700">{sampleSize} konkurentů</strong>.
-              Inzerujte za{" "}
-              <strong className="font-semibold text-slate-700">
-                {recommendedListPrice != null
-                  ? `${recommendedListPrice.toLocaleString("cs-CZ")} Kč`
-                  : "—"}
-              </strong>{" "}
-              — máte prostor slevit a stále být nad mediánem.
-            </>
-          ) : (
-            <>
-              Řídký trh s{" "}
-              <strong className="font-semibold text-slate-700">
-                {sampleSize != null ? sampleSize : "—"} inzeráty
-              </strong>{" "}
-              — méně konkurence, inzerujte odvážněji nad mediánem.
-            </>
-          )}
+          {sellerAdvice}
         </p>
       </div>
     </div>

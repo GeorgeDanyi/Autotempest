@@ -6,6 +6,10 @@ const currencyFormatter = new Intl.NumberFormat("cs-CZ", {
   maximumFractionDigits: 0,
 });
 
+export function roundToNearest(value: number, nearest: number = 500): number {
+  return Math.round(value / nearest) * nearest;
+}
+
 export function formatCurrencyCZK(value: number) {
   if (!Number.isFinite(value)) return "–";
   return currencyFormatter.format(value);

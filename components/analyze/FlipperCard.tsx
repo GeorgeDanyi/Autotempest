@@ -1,12 +1,15 @@
 "use client";
 
 import { ANALYZE_CARD, CARD_LABEL } from "@/components/analyze/cardStyles";
+import { roundToNearest } from "@/lib/ui";
+import { formatInzeraty } from "@/lib/ui/sampleSize";
 
 type FlipperCardProps = {
   medianPrice: number | null;
   p25Price: number | null;
   p75Price: number | null;
   sampleSize: number | null;
+  avgDaysOnMarket: number | null;
 };
 
 const PRO_LOCKED = false;
@@ -16,6 +19,7 @@ export function FlipperCard({
   p25Price,
   p75Price,
   sampleSize,
+  avgDaysOnMarket,
 }: FlipperCardProps) {
   const grossMargin =
     medianPrice != null && p25Price != null ? medianPrice - p25Price : null;
@@ -35,16 +39,21 @@ export function FlipperCard({
           )
         )
       : null;
-  const avgDaysOnMarket =
-    sampleSize != null
-      ? sampleSize >= 50
-        ? 14
-        : sampleSize >= 20
-          ? 22
-          : 35
-      : null;
   const underP25Count =
     sampleSize != null ? Math.max(1, Math.round(sampleSize * 0.08)) : null;
+
+  let radarText: string;
+  if (underP25Count == null || underP25Count === 0) {
+    radarText = "Žádné výrazně podhodnocené vozy v aktuálním vzorku.";
+  } else if (underP25Count === 1) {
+    radarText = `🔥 Detekován 1 inzerát pod dolním kvartilem — příležitost k výkupu pod ${Math.round(
+      (p25Price ?? 0) / 1000,
+    )}k Kč.`;
+  } else {
+    radarText = `Nalezeny ${formatInzeraty(
+      underP25Count,
+    )} s cenou v nejlevnějších 25 % — potenciál pro ziskový flip.`;
+  }
 
   return (
     <div className={`${ANALYZE_CARD} flex h-full flex-col p-6`}>
@@ -73,7 +82,9 @@ export function FlipperCard({
           <p
             className={`mt-1 text-[18px] font-semibold ${(grossMargin ?? 0) > 30000 ? "text-emerald-600" : (grossMargin ?? 0) > 10000 ? "text-sky-600" : "text-amber-600"}`}
           >
-            {grossMargin != null ? `${Math.round(grossMargin / 1000)}k Kč` : "—"}
+            {grossMargin != null
+              ? `${Math.round(roundToNearest(grossMargin) / 1000)}k Kč`
+              : "—"}
           </p>
         </div>
         <div className="rounded-xl bg-slate-50 px-3 py-2.5">
@@ -88,6 +99,9 @@ export function FlipperCard({
           <p className={CARD_LABEL}>Průměrný obrat</p>
           <p className="mt-1 text-[14px] font-semibold text-slate-800">
             {avgDaysOnMarket != null ? `${avgDaysOnMarket} dní` : "—"}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-500">
+            {avgDaysOnMarket != null ? "průměr segmentu" : "nedostatek dat"}
           </p>
         </div>
         <div className="rounded-xl bg-slate-50 px-3 py-2.5">
@@ -105,8 +119,7 @@ export function FlipperCard({
           Arbitrážní radar
         </p>
         <p className="text-[11px] leading-relaxed text-slate-600">
-          {underP25Count ?? "?"} inzerátů je aktuálně pod dolním kvartilem —
-          potenciálně podhodnocené.
+          {radarText}
         </p>
       </div>
     </div>

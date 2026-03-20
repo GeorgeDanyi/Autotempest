@@ -135,17 +135,14 @@ export default function HomePage() {
             Reálné ceny očištěné o extrémy. Zjistěte férovou hodnotu vozu a získejte taktickou výhodu pro nákup, prodej i flipování.
           </p>
 
-          <div className="mt-4 w-full max-w-5xl">
-            <AdvancedSearchSection />
+          <div className="mt-4 w-full max-w-2xl mx-auto">
+            <AdvancedSearchSection variant="light" />
           </div>
 
-          <p className="mt-20 sm:mt-28 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-8">
-            Ukázka výsledku analýzy
-          </p>
         </div>
 
         {/* Floating zone */}
-        <div className="relative mx-auto mt-0 max-w-5xl px-4" style={{ height: "380px" }}>
+        <div className="relative mx-auto mt-20 max-w-5xl px-4" style={{ height: "380px" }}>
           {/* Centrální karta — věrná /analyze stránce */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
