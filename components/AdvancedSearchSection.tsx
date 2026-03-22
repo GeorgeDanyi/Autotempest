@@ -34,6 +34,8 @@ type AdvancedSearchFilters = {
   yearTo: string;
   mileageFrom: string;
   mileageTo: string;
+  mileageSliderFrom: number;
+  mileageSliderTo: number;
   fuels: string[];
   gearbox: string | null;
   engine: string | null;
@@ -99,6 +101,8 @@ const INITIAL_FILTERS: AdvancedSearchFilters = {
   yearTo: "",
   mileageFrom: "",
   mileageTo: "",
+  mileageSliderFrom: 0,
+  mileageSliderTo: 300000,
   fuels: [],
   gearbox: null,
   engine: null,
@@ -128,6 +132,94 @@ function formatKm(value: string) {
   const num = parseInt(value.replace(/\D/g, ""), 10);
   if (Number.isNaN(num)) return "";
   return `${num.toLocaleString("cs-CZ")} km`;
+}
+
+function DualSlider({
+  label,
+  min,
+  max,
+  step,
+  valueFrom,
+  valueTo,
+  onChangeFrom,
+  onChangeTo,
+  formatValue,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  valueFrom: number;
+  valueTo: number;
+  onChangeFrom: (v: number) => void;
+  onChangeTo: (v: number) => void;
+  formatValue: (v: number) => string;
+}) {
+  const pctFrom = ((valueFrom - min) / (max - min)) * 100;
+  const pctTo = ((valueTo - min) / (max - min)) * 100;
+  const pctMid = (pctFrom + pctTo) / 2;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-medium text-slate-500">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] font-semibold text-slate-800 bg-slate-100 rounded-md px-2 py-0.5">
+            {formatValue(valueFrom)}
+          </span>
+          <span className="text-[10px] text-slate-400">–</span>
+          <span className="text-[12px] font-semibold text-slate-800 bg-slate-100 rounded-md px-2 py-0.5">
+            {formatValue(valueTo)}
+          </span>
+        </div>
+      </div>
+      <div className="relative h-[3px] rounded-full bg-slate-200 mx-1.5">
+        <div
+          className="absolute h-full rounded-full bg-blue-500"
+          style={{ left: `${pctFrom}%`, right: `${100 - pctTo}%` }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={valueFrom}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v < valueTo) onChangeFrom(v);
+          }}
+          className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+          style={{
+            zIndex: 5,
+            clipPath: `polygon(0% 0%, ${pctMid}% 0%, ${pctMid}% 100%, 0% 100%)`,
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={valueTo}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v > valueFrom) onChangeTo(v);
+          }}
+          className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+          style={{
+            zIndex: 4,
+            clipPath: `polygon(${pctMid}% 0%, 100% 0%, 100% 100%, ${pctMid}% 100%)`,
+          }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-[2.5px] border-blue-500 shadow-[0_1px_4px_rgba(0,0,0,0.15)] pointer-events-none"
+          style={{ left: `calc(${pctFrom}% - 8px)` }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-[2.5px] border-blue-500 shadow-[0_1px_4px_rgba(0,0,0,0.15)] pointer-events-none"
+          style={{ left: `calc(${pctTo}% - 8px)` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function segmentLabelFromBucket(used_bucket: string): string {
@@ -680,33 +772,35 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
   return (
     <div className="space-y-4 text-center">
       <div className="space-y-3">
-        <div className="relative flex items-center rounded-2xl border border-slate-200 bg-white shadow-[0_2px_20px_rgba(0,0,0,0.08)] overflow-hidden">
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-            <FilterIcon className="h-4 w-4" />
-          </span>
-          <Input
-            value={filters.query}
-            onChange={(e) => setFilter("query", e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleQuickAnalyze();
-            }}
-            placeholder="Popiš auto (např. Škoda Octavia 2019 2.0 TDI DSG, 150 000 km)"
-            className="flex-1 border-0 bg-transparent pl-10 pr-4 py-4 text-[15px] placeholder:text-slate-400 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none h-[56px]"
-          />
-          <div className="flex-shrink-0 p-2">
-            <button
-              type="button"
-              onClick={handleQuickAnalyze}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-blue-700 transition-colors h-[40px]"
-            >
-              Analyzovat
-              <ArrowRight className="h-4 w-4" />
-            </button>
+        <div className="max-w-2xl mx-auto">
+          <div className="relative flex items-center rounded-2xl border border-slate-200 bg-white shadow-[0_2px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              <FilterIcon className="h-4 w-4" />
+            </span>
+            <Input
+              value={filters.query}
+              onChange={(e) => setFilter("query", e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleQuickAnalyze();
+              }}
+              placeholder="Popiš auto (např. Škoda Octavia 2019 2.0 TDI DSG, 150 000 km)"
+              className="flex-1 border-0 bg-transparent pl-10 pr-4 py-4 text-[15px] placeholder:text-slate-400 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none h-[56px]"
+            />
+            <div className="flex-shrink-0 p-2">
+              <button
+                type="button"
+                onClick={handleQuickAnalyze}
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-blue-700 transition-colors h-[40px]"
+              >
+                Analyzovat
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-center gap-2">
+      <div className="max-w-2xl mx-auto mt-3 flex items-center justify-center gap-2">
         <p className={autoTextClassName}>Automaticky doplníme značku, model, rok a filtry.</p>
         <span className={autoTextClassName}>·</span>
         <button
@@ -726,324 +820,327 @@ export function AdvancedSearchSection({ variant = "light" }: AdvancedSearchSecti
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
             style={{ overflow: "hidden" }}
-            className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+            className="mt-3 rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] overflow-hidden w-full"
           >
-          {/* Selected summary pills — zobrazují label (značka/model z API) */}
-          <div className="mt-1 min-h-[28px] flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            {filters.brand && (
-              <button
-                type="button"
-                onClick={() =>
-                  setFilters((prev) => ({ ...prev, brand: null, model: null }))
-                }
-                className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-sky-800 ring-1 ring-sky-200 hover:bg-sky-100"
-              >
-                <span>{(filterOptions?.ok ? filterOptions.brandKeyToLabel?.[filters.brand] : null) ?? filters.brand}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.model && (
-              <button
-                type="button"
-                onClick={() => setFilter("model", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{(filterOptions?.ok ? filterOptions.modelKeyToLabel?.[filters.model] : null) ?? filters.model}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.yearFrom && (
-              <button
-                type="button"
-                onClick={() => setFilter("yearFrom", "")}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>Od {filters.yearFrom}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.yearTo && (
-              <button
-                type="button"
-                onClick={() => setFilter("yearTo", "")}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>Do {filters.yearTo}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {(filters.mileageFrom || filters.mileageTo) && (
-              <button
-                type="button"
-                onClick={() =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    mileageFrom: "",
-                    mileageTo: "",
-                  }))
-                }
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>
-                  Nájezd:{" "}
-                  {filters.mileageFrom && filters.mileageTo
-                    ? `${formatKm(filters.mileageFrom)} – ${formatKm(
-                        filters.mileageTo,
-                      )}`
-                    : filters.mileageFrom
-                    ? `od ${formatKm(filters.mileageFrom)}`
-                    : `do ${formatKm(filters.mileageTo)}`}
-                </span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.fuels.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    fuels: prev.fuels.filter((item) => item !== f),
-                  }))
-                }
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
-              >
-                <span>{f}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            ))}
-            {filters.gearbox && (
-              <button
-                type="button"
-                onClick={() => setFilter("gearbox", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{filters.gearbox}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.engine && (
-              <button
-                type="button"
-                onClick={() => setFilter("engine", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{filters.engine}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.power && filters.power !== "Libovolně" && (
-              <button
-                type="button"
-                onClick={() => setFilter("power", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{filters.power}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.bodyType && (
-              <button
-                type="button"
-                onClick={() => setFilter("bodyType", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{filters.bodyType}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {filters.drivetrain && (
-              <button
-                type="button"
-                onClick={() => setFilter("drivetrain", null)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
-              >
-                <span>{filters.drivetrain}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            )}
-          </div>
-
-          {rangeError && (
-            <p className="mt-2 text-sm text-amber-600" role="alert">
-              {rangeError}
-            </p>
-          )}
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mb-3">
-            Základní parametry
-          </p>
-          {/* Row 1: Značka | Model | Rok od | Rok do – stejná datasource a logika jako /analyze */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <ComboBox
-              label="Značka"
-              placeholder={filterOptions ? "Značka" : "Načítám…"}
-              value={filters.brand}
-              onChange={(v) => {
-                const modelsForNewBrand =
-                  v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
-                const currentModelInNewBrand =
-                  filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
-                setFilters((prev) => ({
-                  ...prev,
-                  brand: v,
-                  model: currentModelInNewBrand ? prev.model : null,
-                }));
-                if (v) setModelDropdownOpen(true);
-              }}
-              options={brandOptions}
-              className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-            />
-            <ComboBox
-              label="Model"
-              placeholder={
-                !filters.brand
-                  ? "Nejprve zvolte značku"
-                  : modelOptions.length
-                  ? "Model"
-                  : "Načítám…"
-              }
-              value={filters.model}
-              onChange={(v) => setFilter("model", v)}
-              options={modelOptions}
-              disabled={!filters.brand}
-              open={modelDropdownOpen}
-              onOpenChange={setModelDropdownOpen}
-              className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-            />
-            <div>
-              <p className="text-[11px] font-medium text-slate-500 mb-1">Rok výroby</p>
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden h-[44px]">
-                <Select
-                  label=""
-                  placeholder="Od"
-                  value={filters.yearFrom || "Libovolně"}
-                  onChange={(v) => setFilter("yearFrom", v === "Libovolně" ? "" : v ?? "")}
-                  options={YEAR_OPTIONS}
-                  className="flex-1 border-0 shadow-none rounded-none h-full text-[14px] space-y-0 [&>label]:sr-only [&>div>button]:h-full [&>div>button]:border-0 [&>div>button]:shadow-none [&>div>button]:rounded-none [&>div>button]:bg-transparent [&>div>button]:text-[14px]"
-                />
-                <div className="w-px h-6 bg-slate-200 flex-shrink-0" />
-                <Select
-                  label=""
-                  placeholder="Do"
-                  value={filters.yearTo || "Libovolně"}
-                  onChange={(v) => setFilter("yearTo", v === "Libovolně" ? "" : v ?? "")}
-                  options={YEAR_OPTIONS}
-                  className="flex-1 border-0 shadow-none rounded-none h-full text-[14px] space-y-0 [&>label]:sr-only [&>div>button]:h-full [&>div>button]:border-0 [&>div>button]:shadow-none [&>div>button]:rounded-none [&>div>button]:bg-transparent [&>div>button]:text-[14px]"
-                />
-              </div>
-            </div>
-          </div>
-
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mt-5 mb-3">
-            Technické parametry
-          </p>
-              {/* Row 2: Nájezd od | Nájezd do | Palivo | Převodovka */}
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div style={{ padding: "20px 24px" }}>
+              {/* ŘÁDEK 1 — 4 selecty + tlačítko */}
+              <div className="grid grid-cols-4 gap-3 items-end">
                 <div>
-                  <p className="text-[11px] font-medium text-slate-500 mb-1">Nájezd km</p>
-                  <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden h-[44px]">
-                    <Select
-                      label=""
-                      placeholder="Od"
-                      value={filters.mileageFrom ? formatKm(filters.mileageFrom) : "Libovolně"}
-                      onChange={(label) => {
-                        const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
-                        setFilter("mileageFrom", o ? o.value : "");
-                      }}
-                      options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
-                      className="flex-1 border-0 shadow-none rounded-none h-full text-[14px] space-y-0 [&>label]:sr-only [&>div>button]:h-full [&>div>button]:border-0 [&>div>button]:shadow-none [&>div>button]:rounded-none [&>div>button]:bg-transparent [&>div>button]:text-[14px]"
-                    />
-                    <div className="w-px h-6 bg-slate-200 flex-shrink-0" />
-                    <Select
-                      label=""
-                      placeholder="Do"
-                      value={filters.mileageTo ? formatKm(filters.mileageTo) : "Libovolně"}
-                      onChange={(label) => {
-                        const o = MILEAGE_DROPDOWN_OPTIONS.find((x) => x.label === label);
-                        setFilter("mileageTo", o ? o.value : "");
-                      }}
-                      options={MILEAGE_DROPDOWN_OPTIONS.map((x) => x.label)}
-                      className="flex-1 border-0 shadow-none rounded-none h-full text-[14px] space-y-0 [&>label]:sr-only [&>div>button]:h-full [&>div>button]:border-0 [&>div>button]:shadow-none [&>div>button]:rounded-none [&>div>button]:bg-transparent [&>div>button]:text-[14px]"
-                    />
-                  </div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Značka</p>
+                  <ComboBox
+                    label=""
+                    placeholder={filterOptions ? "Značka" : "Načítám…"}
+                    value={filters.brand}
+                    onChange={(v) => {
+                      const modelsForNewBrand =
+                        v && filterOptions?.ok ? filterOptions.modelsByBrand[v] ?? [] : [];
+                      const currentModelInNewBrand =
+                        filters.model && modelsForNewBrand.some((m) => m.value === filters.model);
+                      setFilters((prev) => ({ ...prev, brand: v, model: currentModelInNewBrand ? prev.model : null }));
+                      if (v) setModelDropdownOpen(true);
+                    }}
+                    options={brandOptions}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
                 </div>
-                <MultiSelect
-                  label="Palivo"
-                  placeholder="Palivo"
-                  value={filters.fuels}
-                  onChange={(v) => setFilter("fuels", v)}
-                  options={[...FUEL_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-                />
-                <Select
-                  label="Převodovka"
-                  placeholder="Převodovka"
-                  value={filters.gearbox}
-                  onChange={(v) => setFilter("gearbox", v)}
-                  options={[...GEARBOX_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-                />
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Model</p>
+                  <ComboBox
+                    label=""
+                    placeholder={!filters.brand ? "Nejprve zvolte značku" : "Model"}
+                    value={filters.model}
+                    onChange={(v) => setFilter("model", v)}
+                    options={modelOptions}
+                    disabled={!filters.brand}
+                    open={modelDropdownOpen}
+                    onOpenChange={setModelDropdownOpen}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Palivo</p>
+                  <Select
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.fuels?.[0] ?? null}
+                    onChange={(v) => setFilter("fuels", v ? [v] : [])}
+                    options={["Libovolně", ...FUEL_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Převodovka</p>
+                  <Select
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.gearbox}
+                    onChange={(v) => setFilter("gearbox", v)}
+                    options={[...GEARBOX_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
               </div>
 
-              {/* Row 3: Motor | Výkon | Karoserie | Pohon */}
-              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 mt-5 mb-3">
-                Detaily vozu
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <ComboBox
-                  label="Motor"
-                  placeholder="Motor"
-                  value={filters.engine}
-                  onChange={(v) => setFilter("engine", v)}
-                  options={[...ENGINE_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
+              {/* ODDĚLOVAČ */}
+              <div className="border-t border-slate-100 my-4" />
+
+              {/* ŘÁDEK 2 — 2 slidery vedle sebe */}
+              <div className="grid grid-cols-2 gap-6">
+                <DualSlider
+                  label="Rok výroby"
+                  min={2000}
+                  max={2025}
+                  step={1}
+                  valueFrom={filters.yearFrom ? parseInt(filters.yearFrom) : 2000}
+                  valueTo={filters.yearTo ? parseInt(filters.yearTo) : 2025}
+                  onChangeFrom={(v) => setFilter("yearFrom", v === 2000 ? "" : String(v))}
+                  onChangeTo={(v) => setFilter("yearTo", v === 2025 ? "" : String(v))}
+                  formatValue={(v) => String(v)}
                 />
-                <Select
-                  label="Výkon"
-                  placeholder="Výkon"
-                  value={filters.power ?? "Libovolně"}
-                  onChange={(v) =>
-                    setFilter("power", v === "Libovolně" ? null : v ?? null)
+                <DualSlider
+                  label="Nájezd km"
+                  min={0}
+                  max={300000}
+                  step={5000}
+                  valueFrom={filters.mileageSliderFrom ?? 0}
+                  valueTo={filters.mileageSliderTo ?? 300000}
+                  onChangeFrom={(v) => {
+                    setFilter("mileageSliderFrom", v);
+                    setFilter("mileageFrom", v === 0 ? "" : String(v));
+                  }}
+                  onChangeTo={(v) => {
+                    setFilter("mileageSliderTo", v);
+                    setFilter("mileageTo", v === 300000 ? "" : String(v));
+                  }}
+                  formatValue={(v) =>
+                    v === 0
+                      ? "0 km"
+                      : v === 300000
+                        ? "300+ tis."
+                        : `${Math.round(v / 1000)} tis. km`
                   }
-                  options={[...POWER_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-                />
-                <Select
-                  label="Karoserie"
-                  placeholder="Karoserie"
-                  value={filters.bodyType}
-                  onChange={(v) => setFilter("bodyType", v)}
-                  options={[...BODY_TYPE_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
-                />
-                <Select
-                  label="Pohon"
-                  placeholder="Pohon"
-                  value={filters.drivetrain}
-                  onChange={(v) => setFilter("drivetrain", v)}
-                  options={[...DRIVETRAIN_OPTIONS]}
-                  className="rounded-xl border-slate-200 bg-white h-[44px] text-[14px] [&>label]:text-[11px] [&>label]:font-medium [&>label]:text-slate-500 [&>label]:mb-1 [&>div>button]:h-[44px] [&>div>button]:rounded-xl [&>div>button]:border-slate-200 [&>div>button]:bg-white [&>div>button]:text-[14px]"
                 />
               </div>
 
-          <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="text-[12px] text-slate-400 hover:text-slate-600 transition-colors mr-auto"
-            >
-              Vymazat vše
-            </button>
-            <GradientButton
-              variant="primary"
-              className="px-4 py-1.5 text-xs"
-              rightIcon={<ArrowRight className="h-3 w-3" />}
-              onClick={handleApply}
-            >
-              Použít filtry
-            </GradientButton>
-          </div>
+              {/* ODDĚLOVAČ */}
+              <div className="border-t border-slate-100 my-4" />
+
+              {/* ŘÁDEK 3 — Detaily vozu, 4 selecty */}
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Motor</p>
+                  <ComboBox
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.engine}
+                    onChange={(v) => setFilter("engine", v)}
+                    options={[...ENGINE_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Výkon</p>
+                  <Select
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.power ?? "Libovolně"}
+                    onChange={(v) => setFilter("power", v === "Libovolně" ? null : v ?? null)}
+                    options={[...POWER_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Karoserie</p>
+                  <Select
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.bodyType}
+                    onChange={(v) => setFilter("bodyType", v)}
+                    options={[...BODY_TYPE_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500 mb-1.5">Pohon</p>
+                  <Select
+                    label=""
+                    placeholder="Libovolně"
+                    value={filters.drivetrain}
+                    onChange={(v) => setFilter("drivetrain", v)}
+                    options={[...DRIVETRAIN_OPTIONS]}
+                    className="h-9 text-[13px] rounded-lg border-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* ODDĚLOVAČ */}
+              <div className="border-t border-slate-100 mt-4 pt-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-[12px] text-slate-400 hover:text-slate-700 transition-colors"
+                >
+                  Vymazat vše
+                </button>
+                <GradientButton
+                  variant="primary"
+                  className="px-5 py-2 text-[13px]"
+                  rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                  onClick={handleApply}
+                >
+                  Použít filtry
+                </GradientButton>
+              </div>
+
+              {/* Summary pills — zachovej beze změny */}
+              <div className="min-h-[28px] flex flex-wrap items-center gap-2">
+                {filters.brand && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, brand: null, model: null }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-sky-800 ring-1 ring-sky-200 hover:bg-sky-100"
+                  >
+                    <span>
+                      {(filterOptions?.ok
+                        ? filterOptions.brandKeyToLabel?.[filters.brand]
+                        : null) ?? filters.brand}
+                    </span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.model && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("model", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>
+                      {(filterOptions?.ok
+                        ? filterOptions.modelKeyToLabel?.[filters.model]
+                        : null) ?? filters.model}
+                    </span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.yearFrom && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("yearFrom", "")}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>Od {filters.yearFrom}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.yearTo && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("yearTo", "")}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>Do {filters.yearTo}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {(filters.mileageFrom || filters.mileageTo) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        mileageFrom: "",
+                        mileageTo: "",
+                        mileageSliderFrom: 0,
+                        mileageSliderTo: 300000,
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>
+                      Nájezd:{" "}
+                      {filters.mileageFrom && filters.mileageTo
+                        ? `${formatKm(filters.mileageFrom)} – ${formatKm(
+                            filters.mileageTo,
+                          )}`
+                        : filters.mileageFrom
+                          ? `od ${formatKm(filters.mileageFrom)}`
+                          : `do ${formatKm(filters.mileageTo)}`}
+                    </span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.fuels.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        fuels: prev.fuels.filter((item) => item !== f),
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                  >
+                    <span>{f}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                ))}
+                {filters.gearbox && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("gearbox", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>{filters.gearbox}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.engine && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("engine", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>{filters.engine}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.power && filters.power !== "Libovolně" && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("power", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>{filters.power}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.bodyType && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("bodyType", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>{filters.bodyType}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+                {filters.drivetrain && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("drivetrain", null)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-1 text-slate-800 ring-1 ring-slate-200 hover:bg-slate-100"
+                  >
+                    <span>{filters.drivetrain}</span>
+                    <span className="text-[10px]">✕</span>
+                  </button>
+                )}
+              </div>
+
+              {rangeError && <p className="mt-2 text-sm text-amber-600">{rangeError}</p>}
+            </div>
           </motion.div>
         </AnimatePresence>
       )}

@@ -135,7 +135,7 @@ export default function HomePage() {
             Reálné ceny očištěné o extrémy. Zjistěte férovou hodnotu vozu a získejte taktickou výhodu pro nákup, prodej i flipování.
           </p>
 
-          <div className="mt-4 w-full max-w-2xl mx-auto">
+          <div className="mt-6 w-full max-w-4xl mx-auto px-4">
             <AdvancedSearchSection variant="light" />
           </div>
 
